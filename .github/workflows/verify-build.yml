@@ -21,6 +21,9 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Show debug info
         run: ./gradlew --version
 
