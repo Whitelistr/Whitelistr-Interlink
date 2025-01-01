@@ -28,9 +28,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Set up Interlink mod
-        run: ./gradlew cleanCache clean setup --refresh-dependencies
-
       - name: Build Interlink mod
         run: ./gradlew build
 
