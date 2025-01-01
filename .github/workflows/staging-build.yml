@@ -1,0 +1,49 @@
+name: Pre-release build
+
+on:
+  push:
+    branches:
+      - forge/1.7.10
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+
+      - name: Show debug info
+        run: ./gradlew --version
+
+      - name: Set up Interlink mod
+        run: ./gradlew cleanCache clean setup --refresh-dependencies
+
+      - name: Build Interlink mod
+        run: ./gradlew build
+
+      - name: Get short hash
+        id: short_sha
+        run: echo "::set-output name=sha::$(expr substr ${{ github.sha }} 1 7)"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: staging-${{ steps.short_sha.outputs.sha }}
+          prerelease: true
+          name: Staging build ${{ steps.short_sha.outputs.sha }}
+          body: |
+            This is an automatic pre-release build of commit ${{ github.sha }}.
+            Use this to test the next pre-release build of Whitelistr Interlink mod.
+          files: |
+            build/libs/*
+
