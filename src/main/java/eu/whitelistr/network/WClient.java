@@ -45,6 +45,9 @@ public class WClient extends WebSocketClient {
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         System.out.println("Connected to WebSocket server");
+        this.addHeader("x-api-key", API_KEY);
+        this.addHeader("x-server-uuid", SERVER_UUID);
+
         reconnecting = false;
         sendCacheRequest();
     }

@@ -17,5 +17,13 @@ shadowJar {
     mergeServiceFiles()
 }
 
+task proguard(type: proguard.gradle.ProGuardTask) {
+    // Path to your ProGuard configuration file
+    configuration 'proguard.txt'
+
+    // Use the shadow JAR output by the shadowJar task
+    injars files(shadowJar.archiveFile)
+    outjars 'build/libs/Whitelistr-ProGuard.jar' // Specify the desired output file for ProGuard
+}
 
 
