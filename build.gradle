@@ -1,4 +1,21 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.guardsquare:proguard-gradle:7.1.0'
+    }
+}
 
 plugins {
     id 'com.gtnewhorizons.gtnhconvention'
+    id 'com.github.johnrengelman.shadow'
 }
+
+shadowJar {
+    minimize()
+    mergeServiceFiles()
+}
+
+
+
