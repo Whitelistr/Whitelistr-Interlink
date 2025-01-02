@@ -6,7 +6,9 @@ import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.*;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class WhitelistDatabase {
@@ -95,21 +97,23 @@ public class WhitelistDatabase {
              Statement stmt = conn.createStatement()) {
 
             String createTableSQL = "CREATE TABLE IF NOT EXISTS whitelist (" +
-                "username TEXT PRIMARY KEY NOT NULL);";
+                "uuid TEXT PRIMARY KEY NOT NULL, " +
+                "username TEXT NOT NULL);";
             stmt.execute(createTableSQL);
         } catch (SQLException e) {
             System.err.println("Failed to initialize database: " + e.getMessage());
         }
     }
 
-    public void updateCache(Set<String> whitelistedPlayers) {
-        String insertSQL = "INSERT OR REPLACE INTO whitelist (username) VALUES (?)";
+    public void updateCache(Map<String, String> uuidToUsername) {
+        String insertSQL = "INSERT OR REPLACE INTO whitelist (uuid, username) VALUES (?, ?)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement stmt = conn.prepareStatement(insertSQL)) {
 
-            for (String player : whitelistedPlayers) {
-                stmt.setString(1, player);
+            for (Map.Entry<String, String> entry : uuidToUsername.entrySet()) {
+                stmt.setString(1, entry.getKey()); // UUID
+                stmt.setString(2, entry.getValue()); // Username
                 stmt.addBatch();
             }
             stmt.executeBatch();
@@ -117,6 +121,7 @@ public class WhitelistDatabase {
             System.err.println("Failed to update cache: " + e.getMessage());
         }
     }
+
     public boolean isPlayerWhitelisted(String playerName) {
         String querySQL = "SELECT username FROM whitelist WHERE username = ?";
 
@@ -132,16 +137,16 @@ public class WhitelistDatabase {
             return false;
         }
     }
-    public Set<String> getWhitelistedPlayers() {
-        Set<String> players = new HashSet<>();
-        String querySQL = "SELECT username FROM whitelist";
+    public Map<String, String> getWhitelistedPlayers() {
+        Map<String, String> players = new HashMap<>();
+        String querySQL = "SELECT uuid, username FROM whitelist";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(querySQL)) {
 
             while (rs.next()) {
-                players.add(rs.getString("username"));
+                players.put(rs.getString("uuid"), rs.getString("username"));
             }
         } catch (SQLException e) {
             System.err.println("Failed to retrieve whitelisted players: " + e.getMessage());

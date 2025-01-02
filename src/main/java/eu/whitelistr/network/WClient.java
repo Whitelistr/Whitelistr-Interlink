@@ -1,13 +1,21 @@
 package eu.whitelistr.network;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import eu.whitelistr.cache.WhitelistCache;
 import eu.whitelistr.cache.WhitelistDatabase;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import scala.util.parsing.json.JSONArray;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
@@ -95,11 +103,17 @@ public class WClient extends WebSocketClient {
     private void handleEvent(Event event) {
         if (event.getServerId().equals(SERVER_UUID)) {
             System.out.println("Valid event received for server: " + SERVER_UUID);
-            whitelistUser(event.getUsername());
+            String username = UUIDConvert(event.getUuid());
+            if (username != null) {
+                whitelistUser(username);
+            } else {
+                System.err.println("Failed to convert UUID to username for: " + event.getUuid());
+            }
         } else {
             System.out.println("Received event for a different server: " + event.getServerId());
         }
     }
+
     public boolean isPlayerWhitelisted(String playerName) {
         if (this.isOpen()) {
             System.out.println("Checking whitelist via WebSocket...");
@@ -110,25 +124,63 @@ public class WClient extends WebSocketClient {
         }
     }
 
-    private void whitelistUser(String username) {
-        if (username == null || username.trim().isEmpty()) {
-            System.err.println("Invalid username received. Skipping whitelisting.");
+    private void whitelistUser(String uuid) {
+        if (uuid == null || uuid.trim().isEmpty()) {
+            System.err.println("Invalid UUID received. Skipping whitelisting.");
             return;
         }
-        System.out.println("Whitelisting user: " + username);
-        whitelistCache.updateWhitelist(Collections.singleton(username));
+        String username = UUIDConvert(uuid);
+        if (username != null) {
+            System.out.println("Whitelisting user: " + username);
+            Map<String, String> uuidToUsername = new HashMap<>();
+            uuidToUsername.put(uuid, username);
+            whitelistCache.updateWhitelist(uuidToUsername);
+        } else {
+            System.err.println("Failed to convert UUID to username for: " + uuid);
+        }
+    }
+
+    private String UUIDConvert(String uuid) {
+        try {
+            URL url = new URL("https://api.mojang.com/user/profiles/" + uuid.replace("-", "") + "/names");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+
+            try (InputStreamReader reader = new InputStreamReader(conn.getInputStream());
+                 BufferedReader bufferedReader = new BufferedReader(reader)) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = bufferedReader.readLine()) != null) {
+                    response.append(line);
+                }
+                JsonArray names = JsonParser.parseString(response.toString()).getAsJsonArray();
+                if (names.size() > 0) {
+                    JsonObject latestName = names.get(names.size() - 1).getAsJsonObject();
+                    return latestName.get("name").getAsString();
+                }
+                return null;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to resolve username for UUID " + uuid + ": " + e.getMessage());
+            return null;
+        }
     }
 
     private static class Event {
-        private String username;
+        private String uuid;
         private String serverUUID;
+        private String username;
 
-        public String getUsername() {
-            return username;
+        public String getUuid() {
+            return uuid;
         }
 
         public String getServerId() {
             return serverUUID;
+        }
+
+        public String getUsername() {
+            return username;
         }
     }
 }

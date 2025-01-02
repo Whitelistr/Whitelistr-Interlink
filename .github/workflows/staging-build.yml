@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
+
       - name: Set up JDK 8
         uses: actions/setup-java@v2
         with:
@@ -46,4 +47,4 @@ jobs:
             Use this to test the next pre-release build of Whitelistr Interlink mod.
           files: |
             build/libs/*
-
+          target_commitish: forge/1.7.10

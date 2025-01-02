@@ -19,13 +19,11 @@ public class Whitelistr {
     public void preInit(FMLPreInitializationEvent event) {
         ConfigHandler.loadConfig();
         try {
-            webSocketClient = new WClient("wss://api.whitelistr.space/interlink", ConfigHandler.SERVER_UUID, ConfigHandler.API_KEY);
+            webSocketClient = new WClient(ConfigHandler.WEBSOCKET_URL, ConfigHandler.SERVER_UUID, ConfigHandler.API_KEY);
             webSocketClient.connect();
         } catch (Exception e) {
             e.printStackTrace();
-            if (ConfigHandler.FAIL_ON_DISCONNECT) {
-                throw new RuntimeException("WebSocket connection failed and failOnDisconnect is enabled.");
-            }
+            throw new RuntimeException("WebSocket connection failed.");
         }
     }
 

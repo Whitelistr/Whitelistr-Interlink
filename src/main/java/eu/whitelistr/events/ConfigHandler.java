@@ -11,7 +11,7 @@ public class ConfigHandler {
 
     public static String API_KEY = "";
     public static String SERVER_UUID = "";
-    public static boolean FAIL_ON_DISCONNECT = true;
+    public static String WEBSOCKET_URL = "wss://api.whitelistr.space/interlink";
     private static final Gson gson = new Gson();
     private static File whitelistrDir;
     private static File configFile;
@@ -19,6 +19,7 @@ public class ConfigHandler {
     public static class Config {
         public String x_api_key = "";
         public String x_server_uuid = "";
+        public String websocket_url = "";
     }
     public static void loadConfig() {
         whitelistrDir = new File("Whitelistr");
@@ -37,7 +38,9 @@ public class ConfigHandler {
 
             API_KEY = config.x_api_key;
             SERVER_UUID = config.x_server_uuid;
-
+            if (!config.websocket_url.isEmpty()) {
+                WEBSOCKET_URL = config.websocket_url;
+            }
             if (API_KEY.isEmpty() || SERVER_UUID.isEmpty()) {
                 throw new RuntimeException("API Key or Server UUID is missing in configuration.");
             }
@@ -66,6 +69,7 @@ public class ConfigHandler {
             Config config = new Config();
             config.x_api_key = API_KEY;
             config.x_server_uuid = SERVER_UUID;
+            config.websocket_url = WEBSOCKET_URL;
             gson.toJson(config, writer);
 
             System.out.println("Config saved successfully.");

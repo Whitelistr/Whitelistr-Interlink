@@ -2,6 +2,7 @@ package eu.whitelistr.cache;
 
 import eu.whitelistr.network.WClient;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -34,9 +35,9 @@ public class WhitelistCache {
             System.err.println("Cannot refresh cache. WebSocket connection is unavailable.");
         }
     }
-    public void updateWhitelist(Set<String> whitelistedPlayers) {
+    public void updateWhitelist(Map<String, String> uuidToUsername) {
         System.out.println("Updating local whitelist cache...");
-        database.updateCache(whitelistedPlayers);
+        database.updateCache(uuidToUsername);
     }
     public boolean isPlayerWhitelisted(String playerName) {
         return database.isPlayerWhitelisted(playerName);
