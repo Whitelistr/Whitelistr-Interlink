@@ -24,3 +24,8 @@ hs_err_pid*
 replay_pid*
 
 build
+.gradle
+
+/.gradle
+/.gradle/8.11.1
+/.idea

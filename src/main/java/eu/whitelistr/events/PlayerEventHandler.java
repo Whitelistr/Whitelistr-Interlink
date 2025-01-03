@@ -8,11 +8,11 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.NetworkManager;
 
 import java.net.InetSocketAddress;
+import com.google.gson.JsonObject;
 
 public class PlayerEventHandler {
 
     private final WClient webSocketClient;
-
 
     public PlayerEventHandler(WClient webSocketClient) {
         this.webSocketClient = webSocketClient;
@@ -33,6 +33,7 @@ public class PlayerEventHandler {
                 System.currentTimeMillis(),
                 ConfigHandler.SERVER_UUID
             );
+            sendPlayerDataToWebServer(playerInfo);
             if (!webSocketClient.isPlayerWhitelisted(playerInfo.getUsername())) {
                 ((EntityPlayerMP) event.player).playerNetServerHandler.kickPlayerFromServer("You are not whitelisted!");
             } else {
@@ -40,5 +41,26 @@ public class PlayerEventHandler {
             }
         }
     }
+
+    private void sendPlayerDataToWebServer(PlayerInfo playerInfo) {
+        JsonObject json = new JsonObject();
+        json.addProperty("action", "onJoinPlayer");
+        json.addProperty("uuid", playerInfo.getUuid());
+        json.addProperty("username", playerInfo.getUsername());
+        json.addProperty("serverUUID", playerInfo.getServerId());
+        json.addProperty("joinDate", playerInfo.getTimestamp());
+
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("ip", playerInfo.getIp());
+        metadata.addProperty("hostname", playerInfo.getConnectionAddress());
+        json.add("metadata", metadata);
+
+        if (webSocketClient.isOpen()) {
+            webSocketClient.send(json.toString());
+        } else {
+            System.err.println("WebSocket is not connected. Unable to send player data.");
+        }
+    }
 }
+
 

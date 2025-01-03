@@ -31,26 +31,24 @@ public class WClient extends WebSocketClient {
     private static final int MAX_RETRY_ATTEMPTS = 5;
 
     public WClient(String serverUri, String serverUUID, String apiKey) throws URISyntaxException {
-        super(new URI(serverUri));
+        super(new URI(serverUri), buildHeaders(serverUUID, apiKey));
         this.whitelistCache = new WhitelistCache(new WhitelistDatabase(), this);
     }
 
-    public Map<String, String> getHeaders() {
+    private static Map<String, String> buildHeaders(String serverUUID, String apiKey) {
         Map<String, String> headers = new HashMap<>();
-        headers.put("x-api-key", API_KEY);
-        headers.put("x-server-uuid", SERVER_UUID);
+        headers.put("x-api-key", apiKey);
+        headers.put("x-server-uuid", serverUUID);
         return headers;
     }
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         System.out.println("Connected to WebSocket server");
-        this.addHeader("x-api-key", API_KEY);
-        this.addHeader("x-server-uuid", SERVER_UUID);
-
         reconnecting = false;
         sendCacheRequest();
     }
+
 
     @Override
     public void onMessage(String message) {
@@ -79,7 +77,7 @@ public class WClient extends WebSocketClient {
                     try {
                         Thread.sleep((long) (Math.pow(2, attemptCount) * 1000));
                         this.reconnectBlocking();
-                        System.out.println("Reconnection successful.");
+                        System.out.println("Reconnection initiated.");
                         reconnecting = false;
                         break;
                     } catch (InterruptedException e) {
