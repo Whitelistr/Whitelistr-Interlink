@@ -41,10 +41,10 @@ jobs:
         with:
           tag_name: staging-${{ steps.short_sha.outputs.sha }}
           prerelease: true
-          name: Staging build ${{ steps.short_sha.outputs.sha }}
+          name: Plugin Staging build ${{ steps.short_sha.outputs.sha }}
           body: |
             This is an automatic pre-release build of commit ${{ github.sha }}.
-            Use this to test the next pre-release build of Whitelistr Interlink mod.
+            Use this to test the next pre-release build of Whitelistr Interlink plugin.
           files: |
             build/libs/*
           target_commitish: plugin
