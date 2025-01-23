@@ -1,0 +1,6 @@
+name: Whitelistr-Interlink
+version: '1.0-SNAPSHOT'
+main: eu.whitelistr.Whitelistr
+api-version: '1.18'
+load: STARTUP
+authors: [ Avalanche7CZ ]
