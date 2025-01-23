@@ -1,0 +1,50 @@
+name: Pre-release build
+
+on:
+  push:
+    branches:
+      - plugin
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@dbbdc275be76ac10734476cc723d82dfe7ec6eda # v3.4.2
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build Interlink mod
+        run: ./gradlew build
+
+      - name: Get short hash
+        id: short_sha
+        run: echo "::set-output name=sha::$(expr substr ${{ github.sha }} 1 7)"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: staging-${{ steps.short_sha.outputs.sha }}
+          prerelease: true
+          name: Staging build ${{ steps.short_sha.outputs.sha }}
+          body: |
+            This is an automatic pre-release build of commit ${{ github.sha }}.
+            Use this to test the next pre-release build of Whitelistr Interlink mod.
+          files: |
+            build/libs/*
+          target_commitish: plugin
