@@ -29,6 +29,7 @@ public class WClient extends WebSocketClient {
     private boolean reconnecting = false;
     private final WhitelistCache whitelistCache;
     private static final int MAX_RETRY_ATTEMPTS = 5;
+    private WebSocketResponseCallback callback;
 
     public WClient(String serverUri, String serverUUID, String apiKey) throws URISyntaxException {
         super(new URI(serverUri), buildHeaders(serverUUID, apiKey));
@@ -49,11 +50,29 @@ public class WClient extends WebSocketClient {
         sendCacheRequest();
     }
 
+    public interface WebSocketResponseCallback {
+        void onResponse(boolean isWhitelisted);
+    }
+
 
     @Override
     public void onMessage(String message) {
         Event event = gson.fromJson(message, Event.class);
         handleEvent(event);
+
+        // Handle whitelist response
+        JsonObject jsonResponse = JsonParser.parseString(message).getAsJsonObject();
+        if (jsonResponse.has("action") && jsonResponse.get("action").getAsString().equals("isWhitelisted")) {
+            boolean isWhitelisted = jsonResponse.get("isWhitelisted").getAsBoolean();
+            if (callback != null) {
+                callback.onResponse(isWhitelisted);
+                callback = null; // Clear the callback after use
+            }
+        }
+    }
+
+    public void setWebSocketResponseCallback(WebSocketResponseCallback callback) {
+        this.callback = callback;
     }
 
     @Override
@@ -115,18 +134,34 @@ public class WClient extends WebSocketClient {
         }
     }
 
-    public boolean isPlayerWhitelisted(String playerName) {
-        if (this.isOpen()) {
-            System.out.println("Checking whitelist via WebSocket...");
+    public boolean isPlayerWhitelisted(String uuid) {
+        if (uuid == null || uuid.trim().isEmpty()) {
+            System.err.println("Invalid UUID provided for whitelist check.");
             return false;
-        } else {
-            System.out.println("WebSocket unavailable, falling back to cache...");
-            return whitelistCache.isPlayerWhitelisted(playerName);
         }
+
+        if (this.isOpen()) {
+            try {
+                System.out.println("Checking whitelist via WebSocket...");
+                JsonObject request = new JsonObject();
+                request.addProperty("action", "isWhitelisted");
+                request.addProperty("uuid", uuid);
+                String requestJson = gson.toJson(request);
+                this.send(requestJson);
+                final boolean[] result = {false};
+                setWebSocketResponseCallback(isWhitelisted -> result[0] = isWhitelisted);
+                Thread.sleep(2000);
+                return result[0];
+            } catch (Exception e) {
+                System.err.println("Error while checking WebSocket for whitelist: " + e.getMessage());
+            }
+        }
+        System.out.println("WebSocket unavailable or failed, falling back to cache...");
+        return whitelistCache.isPlayerWhitelisted(uuid);
     }
 
     private void whitelistUser(String uuid) {
-        if (uuid == null || uuid.trim().isEmpty()) {
+        if (uuid == null || uuid.isEmpty()) {
             System.err.println("Invalid UUID received. Skipping whitelisting.");
             return;
         }

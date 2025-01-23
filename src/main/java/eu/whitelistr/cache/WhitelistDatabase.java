@@ -122,21 +122,22 @@ public class WhitelistDatabase {
         }
     }
 
-    public boolean isPlayerWhitelisted(String playerName) {
-        String querySQL = "SELECT username FROM whitelist WHERE username = ?";
+    public boolean isPlayerWhitelisted(String uuid) {
+        String querySQL = "SELECT uuid FROM whitelist WHERE uuid = ?";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement stmt = conn.prepareStatement(querySQL)) {
 
-            stmt.setString(1, playerName);
+            stmt.setString(1, uuid);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
             }
         } catch (SQLException e) {
-            System.err.println("Failed to check whitelist status: " + e.getMessage());
+            System.err.println("Failed to check whitelist status in database: " + e.getMessage());
             return false;
         }
     }
+
     public Map<String, String> getWhitelistedPlayers() {
         Map<String, String> players = new HashMap<>();
         String querySQL = "SELECT uuid, username FROM whitelist";
