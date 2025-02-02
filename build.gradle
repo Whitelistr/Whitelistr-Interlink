@@ -1,9 +1,10 @@
 plugins {
     id 'java'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
 group = 'eu.whitelistr'
-version = '1.0-SNAPSHOT'
+version = '1.0'
 
 repositories {
     mavenCentral()
@@ -22,6 +23,8 @@ dependencies {
     implementation 'org.java-websocket:Java-WebSocket:1.5.2'
     implementation 'com.google.code.gson:gson:2.8.9'
     runtimeOnly('org.xerial:sqlite-jdbc:3.34.0')
+    implementation 'org.slf4j:slf4j-api:1.7.32'
+    runtimeOnly('org.slf4j:slf4j-simple:1.7.32')
 
 }
 
@@ -51,3 +54,16 @@ processResources {
         expand props
     }
 }
+
+shadowJar {
+    archiveClassifier.set('')
+    mergeServiceFiles()
+    relocate 'org.java_websocket', 'eu.whitelistr.shadow.org.java_websocket'
+    relocate 'com.google.gson', 'eu.whitelistr.shadow.com.google.gson'
+    relocate 'org.slf4j', 'eu.whitelistr.shadow.org.slf4j'
+}
+
+build {
+    dependsOn shadowJar
+}
+

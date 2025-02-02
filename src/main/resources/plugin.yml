@@ -1,5 +1,5 @@
-name: Whitelistr-Interlink
-version: '1.0-SNAPSHOT'
+name: Whitelistr
+version: '1.0'
 main: eu.whitelistr.Whitelistr
 api-version: '1.18'
 load: STARTUP

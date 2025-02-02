@@ -1,5 +1,7 @@
 package eu.whitelistr.cache;
 
+import org.bukkit.Bukkit;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -7,9 +9,8 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.*;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.logging.Logger;
 
 public class WhitelistDatabase {
 
@@ -17,6 +18,7 @@ public class WhitelistDatabase {
     private static final String DB_URL;
     private static final String SQLITE_DRIVER_URL = "https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar";
     private static final String DRIVER_CLASS = "org.sqlite.JDBC";
+    private static final Logger logger = Bukkit.getLogger();
 
     static {
         File whitelistrDir = new File("Whitelistr");
@@ -35,7 +37,7 @@ public class WhitelistDatabase {
         try {
             File driverFile = new File("Whitelistr/sqlite-jdbc-3.46.0.jar");
             if (!driverFile.exists()) {
-                System.out.println("Downloading SQLite JDBC driver...");
+                logger.info("Downloading SQLite JDBC driver...");
                 try (InputStream in = new URL(SQLITE_DRIVER_URL).openStream();
                      FileOutputStream out = new FileOutputStream(driverFile)) {
 
@@ -45,7 +47,7 @@ public class WhitelistDatabase {
                         out.write(buffer, 0, bytesRead);
                     }
                 }
-                System.out.println("SQLite JDBC driver downloaded successfully.");
+                logger.info("SQLite JDBC driver downloaded successfully.");
             }
             URLClassLoader classLoader = new URLClassLoader(new URL[]{driverFile.toURI().toURL()});
             Class<?> driverClass = Class.forName(DRIVER_CLASS, true, classLoader);
@@ -87,7 +89,7 @@ public class WhitelistDatabase {
                 }
             });
 
-            System.out.println("SQLite JDBC driver loaded and registered successfully.");
+            logger.warning("Failed to initialize database: ");
         } catch (Exception e) {
             throw new RuntimeException("Failed to load SQLite JDBC driver.", e);
         }
