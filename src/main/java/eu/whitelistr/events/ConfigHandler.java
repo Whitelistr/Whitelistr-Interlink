@@ -11,7 +11,7 @@ public class ConfigHandler {
 
     public static String API_KEY = "";
     public static String SERVER_UUID = "";
-    public static String WEBSOCKET_URL = "wss://api.whitelistr.space/interlink";
+    public static String WEBSOCKET_URL = "wss:/app.whitelistr.space";
     private static final Gson gson = new Gson();
     private static File whitelistrDir;
     private static File configFile;
