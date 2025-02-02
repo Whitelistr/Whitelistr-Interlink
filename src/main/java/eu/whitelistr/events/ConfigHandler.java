@@ -16,11 +16,10 @@ public class ConfigHandler {
 
     public static String API_KEY = "";
     public static String SERVER_UUID = "";
-    public static String WEBSOCKET_URL = "wss://api.whitelistr.space/interlink";
+    public static String WEBSOCKET_URL = "wss:/app.whitelistr.space";
 
     private static File configFile;
 
-    // Config class for JSON mapping
     public static class Config {
         public String api_key = "";
         public String server_uuid = "";
@@ -29,23 +28,19 @@ public class ConfigHandler {
 
     public static void loadConfig() {
         try {
-            // Ensure config directory exists
             File configDir = new File(CONFIG_FOLDER);
             if (!configDir.exists()) {
                 configDir.mkdir();
             }
 
-            // Initialize config file
             configFile = new File(configDir, CONFIG_FILE_NAME);
             if (!configFile.exists()) {
                 copyDefaultConfig();
             }
 
-            // Read and parse config file
             try (Reader reader = new FileReader(configFile)) {
                 Config config = GSON.fromJson(reader, Config.class);
 
-                // Load configuration values
                 API_KEY = config.api_key;
                 SERVER_UUID = config.server_uuid;
                 WEBSOCKET_URL = config.websocket_url.isEmpty() ? WEBSOCKET_URL : config.websocket_url;
@@ -63,11 +58,9 @@ public class ConfigHandler {
         try (InputStream inputStream = ConfigHandler.class.getClassLoader().getResourceAsStream(CONFIG_FILE_NAME)) {
             if (inputStream == null) {
                 System.err.println("Default configuration not found in the JAR. Creating an empty configuration file.");
-                saveConfig(); // Save empty config
+                saveConfig(); 
                 return;
             }
-
-            // Copy default config from resources
             Path configPath = configFile.toPath();
             Files.createDirectories(configPath.getParent());
             Files.copy(inputStream, configPath, StandardCopyOption.REPLACE_EXISTING);
