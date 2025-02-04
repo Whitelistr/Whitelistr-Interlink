@@ -34,13 +34,13 @@
  * For more details, see https://docs.gradle.org/8.0.1/userguide/java_library_plugin.html#sec:java_library_configurations_graph
  */
 dependencies {
-    implementation 'org.java-websocket:Java-WebSocket:1.5.2'
+    implementation 'org.java-websocket:Java-WebSocket:1.6.0'
     implementation 'com.google.code.gson:gson:2.8.9'
     shadowImplementation 'com.google.code.gson:gson:2.8.9'
-    shadowImplementation 'org.java-websocket:Java-WebSocket:1.5.2'
+    //shadowImplementation 'org.java-websocket:Java-WebSocket:1.6.0'
     implementation 'org.slf4j:slf4j-api:1.7.36'
-    runtimeOnly 'org.slf4j:slf4j-simple:1.7.36'
-
+    implementation 'org.slf4j:slf4j-simple:1.7.36'
+    implementation 'org.xerial:sqlite-jdbc:3.46.0.0'
 }
 
 
