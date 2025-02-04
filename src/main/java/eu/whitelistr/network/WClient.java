@@ -134,30 +134,37 @@ public class WClient extends WebSocketClient {
         }
     }
 
-    public boolean isPlayerWhitelisted(String uuid) {
-        if (uuid == null || uuid.trim().isEmpty()) {
-            System.err.println("Invalid UUID provided for whitelist check.");
-            return false;
-        }
+    public boolean syncIsPlayerWhitelisted(String uuid) {
+        if (!this.isOpen()) return false;
 
-        if (this.isOpen()) {
+        final Object lock = new Object();
+        final boolean[] result = {false};
+
+        setWebSocketResponseCallback(isWhitelisted -> {
+            synchronized (lock) {
+                result[0] = isWhitelisted;
+                lock.notifyAll();
+            }
+        });
+
+        JsonObject request = new JsonObject();
+        request.addProperty("action", "isWhitelisted");
+        request.addProperty("uuid", uuid);
+        send(request.toString());
+
+        synchronized (lock) {
             try {
-                System.out.println("Checking whitelist via WebSocket...");
-                JsonObject request = new JsonObject();
-                request.addProperty("action", "isWhitelisted");
-                request.addProperty("uuid", uuid);
-                String requestJson = gson.toJson(request);
-                this.send(requestJson);
-                final boolean[] result = {false};
-                setWebSocketResponseCallback(isWhitelisted -> result[0] = isWhitelisted);
-                Thread.sleep(2000);
-                return result[0];
-            } catch (Exception e) {
-                System.err.println("Error while checking WebSocket for whitelist: " + e.getMessage());
+                lock.wait(1000); // Wait up to 1 second
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
-        System.out.println("WebSocket unavailable or failed, falling back to cache...");
-        return whitelistCache.isPlayerWhitelisted(uuid);
+        return result[0];
+    }
+
+    public String getUsernameFromUUID(String uuid) {
+        // Implement cached UUID to username lookup if possible
+        return UUIDConvert(uuid);
     }
 
     private void whitelistUser(String uuid) {

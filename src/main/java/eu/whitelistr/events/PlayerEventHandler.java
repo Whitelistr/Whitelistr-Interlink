@@ -2,6 +2,7 @@ package eu.whitelistr.events;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
+import eu.whitelistr.cache.WhitelistCache;
 import eu.whitelistr.network.WClient;
 import eu.whitelistr.data.PlayerInfo;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -13,10 +14,13 @@ import com.google.gson.JsonObject;
 public class PlayerEventHandler {
 
     private final WClient webSocketClient;
+    private final WhitelistCache whitelistCache;
 
-    public PlayerEventHandler(WClient webSocketClient) {
+    public PlayerEventHandler(WClient webSocketClient, WhitelistCache whitelistCache) {
         this.webSocketClient = webSocketClient;
+        this.whitelistCache = whitelistCache;
     }
+
 
     @SubscribeEvent
     public void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
@@ -24,6 +28,8 @@ public class PlayerEventHandler {
             NetworkManager networkManager = ((EntityPlayerMP) event.player).playerNetServerHandler.netManager;
             InetSocketAddress remoteAddress = (InetSocketAddress) networkManager.getSocketAddress();
             String playerIP = remoteAddress.getAddress().getHostAddress();
+            EntityPlayerMP player = (EntityPlayerMP) event.player;
+            String uuid = player.getUniqueID().toString();
 
             PlayerInfo playerInfo = new PlayerInfo(
                 playerIP,
@@ -33,11 +39,12 @@ public class PlayerEventHandler {
                 System.currentTimeMillis(),
                 ConfigHandler.SERVER_UUID
             );
+
             sendPlayerDataToWebServer(playerInfo);
-            if (!webSocketClient.isPlayerWhitelisted(playerInfo.getUsername())) {
-                ((EntityPlayerMP) event.player).playerNetServerHandler.kickPlayerFromServer("You are not whitelisted!");
+            if (!whitelistCache.isPlayerWhitelisted(uuid)) {
+                player.playerNetServerHandler.kickPlayerFromServer("You are not whitelisted!");
             } else {
-                System.out.println("Player " + playerInfo.getUsername() + " joined successfully.");
+                System.out.println("Player " + player.getDisplayName() + " joined successfully.");
             }
         }
     }

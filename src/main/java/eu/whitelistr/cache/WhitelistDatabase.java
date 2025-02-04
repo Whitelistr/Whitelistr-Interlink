@@ -6,8 +6,6 @@ import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.*;
-import java.util.HashMap;
-import java.util.Map;
 
 public class WhitelistDatabase {
 
@@ -84,12 +82,12 @@ public class WhitelistDatabase {
                     return driverInstance.getParentLogger();
                 }
             });
-
             System.out.println("SQLite JDBC driver loaded and registered successfully.");
         } catch (Exception e) {
             throw new RuntimeException("Failed to load SQLite JDBC driver.", e);
         }
     }
+
     private void initializeDatabase() {
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement()) {
@@ -102,54 +100,8 @@ public class WhitelistDatabase {
             System.err.println("Failed to initialize database: " + e.getMessage());
         }
     }
-
-    public void updateCache(Map<String, String> uuidToUsername) {
-        String insertSQL = "INSERT OR REPLACE INTO whitelist (uuid, username) VALUES (?, ?)";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement stmt = conn.prepareStatement(insertSQL)) {
-
-            for (Map.Entry<String, String> entry : uuidToUsername.entrySet()) {
-                stmt.setString(1, entry.getKey()); // UUID
-                stmt.setString(2, entry.getValue()); // Username
-                stmt.addBatch();
-            }
-            stmt.executeBatch();
-        } catch (SQLException e) {
-            System.err.println("Failed to update cache: " + e.getMessage());
-        }
-    }
-
-    public boolean isPlayerWhitelisted(String uuid) {
-        String querySQL = "SELECT uuid FROM whitelist WHERE uuid = ?";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement stmt = conn.prepareStatement(querySQL)) {
-
-            stmt.setString(1, uuid);
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException e) {
-            System.err.println("Failed to check whitelist status in database: " + e.getMessage());
-            return false;
-        }
-    }
-
-    public Map<String, String> getWhitelistedPlayers() {
-        Map<String, String> players = new HashMap<>();
-        String querySQL = "SELECT uuid, username FROM whitelist";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(querySQL)) {
-
-            while (rs.next()) {
-                players.put(rs.getString("uuid"), rs.getString("username"));
-            }
-        } catch (SQLException e) {
-            System.err.println("Failed to retrieve whitelisted players: " + e.getMessage());
-        }
-        return players;
+    public static String getDbUrl() {
+        return DB_URL;
     }
 }
+
