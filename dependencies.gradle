@@ -36,9 +36,11 @@
 dependencies {
     implementation 'org.java-websocket:Java-WebSocket:1.5.2'
     implementation 'com.google.code.gson:gson:2.8.9'
-    runtimeOnly('org.xerial:sqlite-jdbc:3.34.0')
     shadowImplementation 'com.google.code.gson:gson:2.8.9'
     shadowImplementation 'org.java-websocket:Java-WebSocket:1.5.2'
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    runtimeOnly 'org.slf4j:slf4j-simple:1.7.36'
+
 }
 
 

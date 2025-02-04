@@ -7,6 +7,9 @@
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Whitelistr-Interlink.main.iml" filepath="$PROJECT_DIR$/.idea/modules/Whitelistr-Interlink.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Whitelistr-Interlink.patchedMc.iml" filepath="$PROJECT_DIR$/.idea/modules/Whitelistr-Interlink.patchedMc.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Whitelistr-Interlink.test.iml" filepath="$PROJECT_DIR$/.idea/modules/Whitelistr-Interlink.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/com.github.GTNewHorizons.Whitelistr-Interlink.api.iml" filepath="$PROJECT_DIR$/.idea/modules/com.github.GTNewHorizons.Whitelistr-Interlink.api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/com.github.GTNewHorizons.Whitelistr-Interlink.ideVirtualMain.iml" filepath="$PROJECT_DIR$/.idea/modules/com.github.GTNewHorizons.Whitelistr-Interlink.ideVirtualMain.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/com.github.GTNewHorizons.Whitelistr-Interlink.patchedMc.iml" filepath="$PROJECT_DIR$/.idea/modules/com.github.GTNewHorizons.Whitelistr-Interlink.patchedMc.iml" />
     </modules>
   </component>
 </project>

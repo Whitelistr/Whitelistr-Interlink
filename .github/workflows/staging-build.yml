@@ -30,7 +30,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build Interlink mod
-        run: ./gradlew build
+        run: ./gradlew build shadowJar
 
       - name: Get short hash
         id: short_sha

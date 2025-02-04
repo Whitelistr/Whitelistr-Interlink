@@ -7,9 +7,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.*;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 public class WhitelistDatabase {
 
@@ -155,6 +153,3 @@ public class WhitelistDatabase {
         return players;
     }
 }
-
-
-
