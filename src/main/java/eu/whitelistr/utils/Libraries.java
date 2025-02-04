@@ -1,5 +1,7 @@
 package eu.whitelistr.utils;
 
+import net.minecraft.launchwrapper.Launch;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -9,12 +11,12 @@ import java.net.URL;
 import java.net.URLClassLoader;
 
 public class Libraries {
-
+    //Using Java Websocket version 1.3.9 bcs of SLF4J issue
     private static final String LIB_DIR = "Whitelistr/libs";
     private static final String SQLITE_DRIVER_URL = "https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.44.1.0/sqlite-jdbc-3.44.1.0.jar";
     private static final String SLF4J_API_URL = "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar";
     private static final String SLF4J_SIMPLE_URL = "https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.13/slf4j-simple-2.0.13.jar";
-    private static final String WEB_SOCKET_URL = "https://repo1.maven.org/maven2/org/java-websocket/Java-WebSocket/1.6.0/Java-WebSocket-1.6.0.jar";
+    private static final String WEB_SOCKET_URL = "https://repo1.maven.org/maven2/org/java-websocket/Java-WebSocket/1.3.9/Java-WebSocket-1.3.9.jar";
 
     public static void loadLibraries() {
         try {
@@ -26,9 +28,9 @@ public class Libraries {
             File sqliteFile = downloadJar(SQLITE_DRIVER_URL, new File(libDir, "sqlite-jdbc-3.44.1.0.jar"));
             File slf4jApiFile = downloadJar(SLF4J_API_URL, new File(libDir, "slf4j-api-2.0.13.jar"));
             File slf4jSimpleFile = downloadJar(SLF4J_SIMPLE_URL, new File(libDir, "slf4j-simple-2.0.13.jar"));
-            File webSocketFile = downloadJar(WEB_SOCKET_URL, new File(libDir, "Java-WebSocket-1.6.0.jar"));
+            File webSocketFile = downloadJar(WEB_SOCKET_URL, new File(libDir, "Java-WebSocket-1.3.9.jar"));
 
-            ClassLoader cl = Libraries.class.getClassLoader();
+            ClassLoader cl = net.minecraft.launchwrapper.Launch.classLoader;
             if (cl instanceof URLClassLoader) {
                 Method addURLMethod = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
                 addURLMethod.setAccessible(true);
@@ -36,10 +38,8 @@ public class Libraries {
                 addURLMethod.invoke(cl, slf4jApiFile.toURI().toURL());
                 addURLMethod.invoke(cl, slf4jSimpleFile.toURI().toURL());
                 addURLMethod.invoke(cl, webSocketFile.toURI().toURL());
-
             } else {
-                System.err.println("Current class loader is not an instance of URLClassLoader. " +
-                    "External libraries might not be injected correctly.");
+                System.err.println("Class loader is not URLClassLoader. Libraries may not be loaded.");
             }
 
             System.out.println("Libraries loaded successfully.");

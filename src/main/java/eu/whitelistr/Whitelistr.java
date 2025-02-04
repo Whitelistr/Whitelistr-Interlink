@@ -18,9 +18,18 @@ public class Whitelistr {
     private WClient webSocketClient;
     private WhitelistCache whitelistCache;
 
+
+    static {
+        try {
+            Libraries.loadLibraries();
+        } catch(Exception e) {
+            System.err.println("Failed to load external libraries: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        Libraries.loadLibraries();
     }
 
     @Mod.EventHandler
