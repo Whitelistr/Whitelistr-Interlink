@@ -2,12 +2,14 @@ package eu.whitelistr;
 
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import eu.whitelistr.cache.WhitelistCache;
 import eu.whitelistr.cache.WhitelistDatabase;
 import eu.whitelistr.events.ConfigHandler;
 import eu.whitelistr.events.PlayerEventHandler;
 import eu.whitelistr.network.WClient;
+import eu.whitelistr.utils.Libraries;
 
 @Mod(modid = Whitelistr.MODID, version = "1.0", name = "Whitelistr", acceptableRemoteVersions = "*")
 public class Whitelistr {
@@ -15,6 +17,11 @@ public class Whitelistr {
     public static final String MODID = "whitelistr";
     private WClient webSocketClient;
     private WhitelistCache whitelistCache;
+
+    @Mod.EventHandler
+    public void preInit(FMLPreInitializationEvent event) {
+        Libraries.loadLibraries();
+    }
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
@@ -27,7 +34,7 @@ public class Whitelistr {
 
         } catch (Exception e) {
             e.printStackTrace();
-            System.err.println("Failed to connect to the WebSocket server. Disabling Whitelistr.");
+            System.err.println("Failed to initialize Whitelistr. Disabling mod.");
         }
     }
 

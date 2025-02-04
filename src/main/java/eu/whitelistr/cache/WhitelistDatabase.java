@@ -1,18 +1,12 @@
 package eu.whitelistr.cache;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.sql.*;
 
 public class WhitelistDatabase {
 
     private static final String DB_FILE_NAME = "whitelist_cache.db";
     private static final String DB_URL;
-    private static final String SQLITE_DRIVER_URL = "https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar";
-    private static final String DRIVER_CLASS = "org.sqlite.JDBC";
 
     static {
         File whitelistrDir = new File("Whitelistr");
@@ -20,72 +14,10 @@ public class WhitelistDatabase {
             whitelistrDir.mkdir();
         }
         DB_URL = "jdbc:sqlite:" + new File(whitelistrDir, DB_FILE_NAME).getAbsolutePath();
-        loadSQLiteDriver();
     }
 
     public WhitelistDatabase() {
         initializeDatabase();
-    }
-
-    private static void loadSQLiteDriver() {
-        try {
-            File driverFile = new File("Whitelistr/sqlite-jdbc-3.46.0.jar");
-            if (!driverFile.exists()) {
-                System.out.println("Downloading SQLite JDBC driver...");
-                try (InputStream in = new URL(SQLITE_DRIVER_URL).openStream();
-                     FileOutputStream out = new FileOutputStream(driverFile)) {
-
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) {
-                        out.write(buffer, 0, bytesRead);
-                    }
-                }
-                System.out.println("SQLite JDBC driver downloaded successfully.");
-            }
-            URLClassLoader classLoader = new URLClassLoader(new URL[]{driverFile.toURI().toURL()});
-            Class<?> driverClass = Class.forName(DRIVER_CLASS, true, classLoader);
-            Driver driverInstance = (Driver) driverClass.getDeclaredConstructor().newInstance();
-            DriverManager.registerDriver(new Driver() {
-                @Override
-                public Connection connect(String url, java.util.Properties info) throws SQLException {
-                    return driverInstance.connect(url, info);
-                }
-
-                @Override
-                public boolean acceptsURL(String url) throws SQLException {
-                    return driverInstance.acceptsURL(url);
-                }
-
-                @Override
-                public DriverPropertyInfo[] getPropertyInfo(String url, java.util.Properties info) throws SQLException {
-                    return driverInstance.getPropertyInfo(url, info);
-                }
-
-                @Override
-                public int getMajorVersion() {
-                    return driverInstance.getMajorVersion();
-                }
-
-                @Override
-                public int getMinorVersion() {
-                    return driverInstance.getMinorVersion();
-                }
-
-                @Override
-                public boolean jdbcCompliant() {
-                    return driverInstance.jdbcCompliant();
-                }
-
-                @Override
-                public java.util.logging.Logger getParentLogger() throws SQLFeatureNotSupportedException {
-                    return driverInstance.getParentLogger();
-                }
-            });
-            System.out.println("SQLite JDBC driver loaded and registered successfully.");
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load SQLite JDBC driver.", e);
-        }
     }
 
     private void initializeDatabase() {
@@ -100,8 +32,8 @@ public class WhitelistDatabase {
             System.err.println("Failed to initialize database: " + e.getMessage());
         }
     }
+
     public static String getDbUrl() {
         return DB_URL;
     }
 }
-
