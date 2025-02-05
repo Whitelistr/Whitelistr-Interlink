@@ -1,20 +1,17 @@
 package eu.whitelistr.network;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import eu.whitelistr.cache.Cache;
 import eu.whitelistr.cache.Database;
+import eu.whitelistr.utils.UUIDResolver;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
+
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -27,10 +24,12 @@ public class WClient extends WebSocketClient {
     private final Cache whitelistCache;
     private static final int MAX_RETRY_ATTEMPTS = 5;
     private WebSocketResponseCallback callback;
+    private final UUIDResolver uuidResolver;
 
     public WClient(String serverUri, String serverUUID, String apiKey) throws URISyntaxException {
         super(new URI(serverUri), buildHeaders(serverUUID, apiKey));
         this.whitelistCache = new Cache(new Database(), this);
+        this.uuidResolver = new UUIDResolver();
     }
 
     private static Map<String, String> buildHeaders(String serverUUID, String apiKey) {
@@ -50,23 +49,25 @@ public class WClient extends WebSocketClient {
     public interface WebSocketResponseCallback {
         void onResponse(boolean isWhitelisted);
     }
-
-
     @Override
-    public void onMessage(String message) {
-        Event event = gson.fromJson(message, Event.class);
-        handleEvent(event);
 
-        // Handle whitelist response
+    public void onMessage(String message) {
         JsonObject jsonResponse = new JsonParser().parse(message).getAsJsonObject();
         if (jsonResponse.has("action") && jsonResponse.get("action").getAsString().equals("isWhitelisted")) {
             boolean isWhitelisted = jsonResponse.get("isWhitelisted").getAsBoolean();
             if (callback != null) {
                 callback.onResponse(isWhitelisted);
-                callback = null; // Clear the callback after use
+                callback = null;
             }
         }
+        if (jsonResponse.has("whitelistedPlayers")) {
+            jsonResponse.getAsJsonArray("whitelistedPlayers").forEach(element -> {
+                String uuid = element.getAsString();
+                whitelistUser(uuid);
+            });
+        }
     }
+
 
     public void setWebSocketResponseCallback(WebSocketResponseCallback callback) {
         this.callback = callback;
@@ -118,20 +119,12 @@ public class WClient extends WebSocketClient {
     }
 
     private void handleEvent(Event event) {
-        if (event.getServerId() != null && event.getServerId().equals(SERVER_UUID)) {
-            System.out.println("Valid event received for server: " + SERVER_UUID);
-            String username = UUIDConvert(event.getUuid());
-            if (username != null) {
-                whitelistUser(username);
-            } else {
-                System.err.println("Failed to convert UUID to username for: " + event.getUuid());
-            }
+        System.out.println("Valid event received for server: " + SERVER_UUID);
+        String username = uuidResolver.resolveUUIDToUsername(event.getUuid());
+        if (username != null) {
+            whitelistUser(username);
         } else {
-            if (event.getServerId() == null) {
-                System.err.println("Received event with null serverId");
-            } else {
-                System.out.println("Received event for a different server: " + event.getServerId());
-            }
+            System.err.println("Failed to convert UUID to username for: " + event.getUuid());
         }
     }
 
@@ -156,7 +149,7 @@ public class WClient extends WebSocketClient {
 
         synchronized (lock) {
             try {
-                lock.wait(1000); // Wait up to 1 second
+                lock.wait(1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -165,8 +158,7 @@ public class WClient extends WebSocketClient {
     }
 
     public String getUsernameFromUUID(String uuid) {
-        // Implement cached UUID to username lookup if possible
-        return UUIDConvert(uuid);
+        return uuidResolver.resolveUUIDToUsername(uuid);
     }
 
     private void whitelistUser(String uuid) {
@@ -174,7 +166,7 @@ public class WClient extends WebSocketClient {
             System.err.println("Invalid UUID received. Skipping whitelisting.");
             return;
         }
-        String username = UUIDConvert(uuid);
+        String username = uuidResolver.resolveUUIDToUsername(uuid);
         if (username != null) {
             System.out.println("Whitelisting user: " + username);
             Map<String, String> uuidToUsername = new HashMap<>();
@@ -182,32 +174,6 @@ public class WClient extends WebSocketClient {
             whitelistCache.updateWhitelist(uuidToUsername);
         } else {
             System.err.println("Failed to convert UUID to username for: " + uuid);
-        }
-    }
-
-    private String UUIDConvert(String uuid) {
-        try {
-            URL url = new URL("https://api.mojang.com/user/profiles/" + uuid.replace("-", "") + "/names");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-
-            try (InputStreamReader reader = new InputStreamReader(conn.getInputStream());
-                 BufferedReader bufferedReader = new BufferedReader(reader)) {
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = bufferedReader.readLine()) != null) {
-                    response.append(line);
-                }
-                JsonArray names = JsonParser.parseString(response.toString()).getAsJsonArray();
-                if (names.size() > 0) {
-                    JsonObject latestName = names.get(names.size() - 1).getAsJsonObject();
-                    return latestName.get("name").getAsString();
-                }
-                return null;
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to resolve username for UUID " + uuid + ": " + e.getMessage());
-            return null;
         }
     }
 
