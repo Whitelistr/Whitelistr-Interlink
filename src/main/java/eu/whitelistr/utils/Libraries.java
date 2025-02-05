@@ -16,7 +16,7 @@ public class Libraries {
     private static final String SQLITE_DRIVER_URL = "https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.44.1.0/sqlite-jdbc-3.44.1.0.jar";
     private static final String SLF4J_API_URL = "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar";
     private static final String SLF4J_SIMPLE_URL = "https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.13/slf4j-simple-2.0.13.jar";
-    private static final String WEB_SOCKET_URL = "https://repo1.maven.org/maven2/org/java-websocket/Java-WebSocket/1.3.9/Java-WebSocket-1.3.9.jar";
+    private static final String WEB_SOCKET_URL = "https://github.com/Whitelistr/Java-WebSocket/releases/download/1.6.1-SNAPSHOT/Java-WebSocket-1.6.1-SNAPSHOT.jar";
 
     public static void loadLibraries() {
         try {
@@ -28,7 +28,7 @@ public class Libraries {
             File sqliteFile = downloadJar(SQLITE_DRIVER_URL, new File(libDir, "sqlite-jdbc-3.44.1.0.jar"));
             File slf4jApiFile = downloadJar(SLF4J_API_URL, new File(libDir, "slf4j-api-2.0.13.jar"));
             File slf4jSimpleFile = downloadJar(SLF4J_SIMPLE_URL, new File(libDir, "slf4j-simple-2.0.13.jar"));
-            File webSocketFile = downloadJar(WEB_SOCKET_URL, new File(libDir, "Java-WebSocket-1.3.9.jar"));
+            File webSocketFile = downloadJar(WEB_SOCKET_URL, new File(libDir, "Java-WebSocket-1.6.1-SNAPSHOT.jar"));
 
             ClassLoader cl = net.minecraft.launchwrapper.Launch.classLoader;
             if (cl instanceof URLClassLoader) {
