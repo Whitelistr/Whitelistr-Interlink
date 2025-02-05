@@ -8,13 +8,13 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class WhitelistCache {
+public class Cache {
 
-    private static final long CACHE_REFRESH_INTERVAL = 15 * 60 * 1000L; // 15 minutes?
-    private final WhitelistDatabase database;
+    private static final long CACHE_REFRESH_INTERVAL = 5 * 60 * 1000L; //5 minutes?
+    private final Database database;
     private final WClient webSocketClient;
 
-    public WhitelistCache(WhitelistDatabase database, WClient webSocketClient) {
+    public Cache(Database database, WClient webSocketClient) {
         this.database = database;
         this.webSocketClient = webSocketClient;
         scheduleCacheRefresh();
@@ -41,7 +41,7 @@ public class WhitelistCache {
 
     public void updateWhitelist(Map<String, String> uuidToUsername) {
         System.out.println("Updating local whitelist cache...");
-        String dbUrl = WhitelistDatabase.getDbUrl();
+        String dbUrl = Database.getDbUrl();
         String insertSQL = "INSERT OR REPLACE INTO whitelist (uuid, username) VALUES (?, ?)";
         try (Connection conn = DriverManager.getConnection(dbUrl);
              PreparedStatement stmt = conn.prepareStatement(insertSQL)) {
@@ -59,7 +59,7 @@ public class WhitelistCache {
 
     public boolean isPlayerWhitelisted(String uuid) {
         // Check local cache first
-        String dbUrl = WhitelistDatabase.getDbUrl();
+        String dbUrl = Database.getDbUrl();
         String querySQL = "SELECT uuid FROM whitelist WHERE uuid = ?";
         try (Connection conn = DriverManager.getConnection(dbUrl);
              PreparedStatement stmt = conn.prepareStatement(querySQL)) {
@@ -88,7 +88,7 @@ public class WhitelistCache {
 
     public Map<String, String> getWhitelistedPlayers() {
         Map<String, String> players = new HashMap<>();
-        String dbUrl = WhitelistDatabase.getDbUrl();
+        String dbUrl = Database.getDbUrl();
         String querySQL = "SELECT uuid, username FROM whitelist";
         try (Connection conn = DriverManager.getConnection(dbUrl);
              Statement stmt = conn.createStatement();

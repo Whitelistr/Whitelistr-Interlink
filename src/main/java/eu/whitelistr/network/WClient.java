@@ -4,11 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import eu.whitelistr.cache.WhitelistCache;
-import eu.whitelistr.cache.WhitelistDatabase;
+import eu.whitelistr.cache.Cache;
+import eu.whitelistr.cache.Database;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import scala.util.parsing.json.JSONArray;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -16,24 +15,22 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
 
 import static eu.whitelistr.events.ConfigHandler.SERVER_UUID;
-import static eu.whitelistr.events.ConfigHandler.API_KEY;
 
 public class WClient extends WebSocketClient {
 
     public static final Gson gson = new Gson();
     private boolean reconnecting = false;
-    private final WhitelistCache whitelistCache;
+    private final Cache whitelistCache;
     private static final int MAX_RETRY_ATTEMPTS = 5;
     private WebSocketResponseCallback callback;
 
     public WClient(String serverUri, String serverUUID, String apiKey) throws URISyntaxException {
         super(new URI(serverUri), buildHeaders(serverUUID, apiKey));
-        this.whitelistCache = new WhitelistCache(new WhitelistDatabase(), this);
+        this.whitelistCache = new Cache(new Database(), this);
     }
 
     private static Map<String, String> buildHeaders(String serverUUID, String apiKey) {
@@ -61,7 +58,7 @@ public class WClient extends WebSocketClient {
         handleEvent(event);
 
         // Handle whitelist response
-        JsonObject jsonResponse = JsonParser.parseString(message).getAsJsonObject();
+        JsonObject jsonResponse = new JsonParser().parse(message).getAsJsonObject();
         if (jsonResponse.has("action") && jsonResponse.get("action").getAsString().equals("isWhitelisted")) {
             boolean isWhitelisted = jsonResponse.get("isWhitelisted").getAsBoolean();
             if (callback != null) {
@@ -121,7 +118,7 @@ public class WClient extends WebSocketClient {
     }
 
     private void handleEvent(Event event) {
-        if (event.getServerId().equals(SERVER_UUID)) {
+        if (event.getServerId() != null && event.getServerId().equals(SERVER_UUID)) {
             System.out.println("Valid event received for server: " + SERVER_UUID);
             String username = UUIDConvert(event.getUuid());
             if (username != null) {
@@ -130,9 +127,14 @@ public class WClient extends WebSocketClient {
                 System.err.println("Failed to convert UUID to username for: " + event.getUuid());
             }
         } else {
-            System.out.println("Received event for a different server: " + event.getServerId());
+            if (event.getServerId() == null) {
+                System.err.println("Received event with null serverId");
+            } else {
+                System.out.println("Received event for a different server: " + event.getServerId());
+            }
         }
     }
+
 
     public boolean syncIsPlayerWhitelisted(String uuid) {
         if (!this.isOpen()) return false;

@@ -4,8 +4,8 @@ import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
-import eu.whitelistr.cache.WhitelistCache;
-import eu.whitelistr.cache.WhitelistDatabase;
+import eu.whitelistr.cache.Cache;
+import eu.whitelistr.cache.Database;
 import eu.whitelistr.events.ConfigHandler;
 import eu.whitelistr.events.PlayerEventHandler;
 import eu.whitelistr.network.WClient;
@@ -16,7 +16,7 @@ public class Whitelistr {
 
     public static final String MODID = "whitelistr";
     private WClient webSocketClient;
-    private WhitelistCache whitelistCache;
+    private Cache whitelistCache;
 
 
     static {
@@ -38,8 +38,8 @@ public class Whitelistr {
         try {
             webSocketClient = new WClient(ConfigHandler.WEBSOCKET_URL, ConfigHandler.SERVER_UUID, ConfigHandler.API_KEY);
             webSocketClient.connect();
-            WhitelistDatabase database = new WhitelistDatabase();
-            whitelistCache = new WhitelistCache(database, webSocketClient);
+            Database database = new Database();
+            whitelistCache = new Cache(database, webSocketClient);
 
         } catch (Exception e) {
             e.printStackTrace();

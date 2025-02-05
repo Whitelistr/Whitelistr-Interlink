@@ -3,7 +3,7 @@ package eu.whitelistr.cache;
 import java.io.File;
 import java.sql.*;
 
-public class WhitelistDatabase {
+public class Database {
 
     private static final String DB_FILE_NAME = "whitelist_cache.db";
     private static final String DB_URL;
@@ -16,7 +16,7 @@ public class WhitelistDatabase {
         DB_URL = "jdbc:sqlite:" + new File(whitelistrDir, DB_FILE_NAME).getAbsolutePath();
     }
 
-    public WhitelistDatabase() {
+    public Database() {
         initializeDatabase();
     }
 

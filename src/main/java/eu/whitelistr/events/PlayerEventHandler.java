@@ -2,7 +2,7 @@ package eu.whitelistr.events;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
-import eu.whitelistr.cache.WhitelistCache;
+import eu.whitelistr.cache.Cache;
 import eu.whitelistr.network.WClient;
 import eu.whitelistr.data.PlayerInfo;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -14,9 +14,9 @@ import com.google.gson.JsonObject;
 public class PlayerEventHandler {
 
     private final WClient webSocketClient;
-    private final WhitelistCache whitelistCache;
+    private final Cache whitelistCache;
 
-    public PlayerEventHandler(WClient webSocketClient, WhitelistCache whitelistCache) {
+    public PlayerEventHandler(WClient webSocketClient, Cache whitelistCache) {
         this.webSocketClient = webSocketClient;
         this.whitelistCache = whitelistCache;
     }
