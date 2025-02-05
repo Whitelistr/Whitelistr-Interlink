@@ -14,6 +14,12 @@ public class Database {
             whitelistrDir.mkdir();
         }
         DB_URL = "jdbc:sqlite:" + new File(whitelistrDir, DB_FILE_NAME).getAbsolutePath();
+
+        try {
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("SQLite JDBC driver not found!", e);
+        }
     }
 
     public Database() {

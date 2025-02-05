@@ -7,12 +7,13 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class UUIDResolver {
 
-    public String resolveUUIDToUsername(String uuid) {
+    public Map<String, String> resolveUUIDToUsername(String uuid) {
         try {
             URL url = new URL("https://playerdb.co/api/player/minecraft/" + uuid);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -21,7 +22,7 @@ public class UUIDResolver {
             conn.setRequestProperty("Accept", "application/json");
             conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
             int responseCode = conn.getResponseCode();
-            System.out.println("Response Code: " + responseCode);
+            //System.out.println("Response Code: " + responseCode);
             Map<String, List<String>> headers = conn.getHeaderFields();
             headers.forEach((key, value) -> System.out.println(key + ": " + value));
             BufferedReader reader;
@@ -36,18 +37,25 @@ public class UUIDResolver {
                 response.append(line);
             }
             reader.close();
-            System.out.println("Raw response: " + response.toString());
+            //System.out.println("Raw response: " + response.toString());
 
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 return null;
             }
+
+            // Parsing the response to get both username and full UUID
             JsonObject jsonResponse = new JsonParser().parse(response.toString()).getAsJsonObject();
             if (jsonResponse.has("data")) {
                 JsonObject data = jsonResponse.getAsJsonObject("data");
                 if (data.has("player")) {
                     JsonObject player = data.getAsJsonObject("player");
-                    if (player.has("username")) {
-                        return player.get("username").getAsString();
+                    if (player.has("username") && player.has("id")) {
+                        String username = player.get("username").getAsString();
+                        String fullUUID = player.get("id").getAsString();
+                        Map<String, String> result = new HashMap<>();
+                        result.put("username", username);
+                        result.put("fullUUID", fullUUID);  // Return both username and full UUID
+                        return result;
                     }
                 }
             }
@@ -58,6 +66,7 @@ public class UUIDResolver {
         return null;
     }
 }
+
 
 
 

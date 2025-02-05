@@ -35,11 +35,17 @@ public class Whitelistr {
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
         ConfigHandler.loadConfig();
+
         try {
             webSocketClient = new WClient(ConfigHandler.WEBSOCKET_URL, ConfigHandler.SERVER_UUID, ConfigHandler.API_KEY);
             webSocketClient.connect();
             Database database = new Database();
             whitelistCache = new Cache(database, webSocketClient);
+
+
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(
+                new PlayerEventHandler(webSocketClient, whitelistCache)
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -49,10 +55,6 @@ public class Whitelistr {
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
-        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(
-            new PlayerEventHandler(webSocketClient, whitelistCache)
-        );
-
         System.out.println("Whitelistr Mod: Server Starting with UUID: " + ConfigHandler.SERVER_UUID);
     }
 }

@@ -118,17 +118,6 @@ public class WClient extends WebSocketClient {
         this.send("{\"action\":\"sendCache\"}");
     }
 
-    private void handleEvent(Event event) {
-        System.out.println("Valid event received for server: " + SERVER_UUID);
-        String username = uuidResolver.resolveUUIDToUsername(event.getUuid());
-        if (username != null) {
-            whitelistUser(username);
-        } else {
-            System.err.println("Failed to convert UUID to username for: " + event.getUuid());
-        }
-    }
-
-
     public boolean syncIsPlayerWhitelisted(String uuid) {
         if (!this.isOpen()) return false;
 
@@ -158,7 +147,11 @@ public class WClient extends WebSocketClient {
     }
 
     public String getUsernameFromUUID(String uuid) {
-        return uuidResolver.resolveUUIDToUsername(uuid);
+        Map<String, String> userInfo = uuidResolver.resolveUUIDToUsername(uuid);
+        if (userInfo != null) {
+            return userInfo.get("username");
+        }
+        return null;
     }
 
     private void whitelistUser(String uuid) {
@@ -166,12 +159,19 @@ public class WClient extends WebSocketClient {
             System.err.println("Invalid UUID received. Skipping whitelisting.");
             return;
         }
-        String username = uuidResolver.resolveUUIDToUsername(uuid);
-        if (username != null) {
-            System.out.println("Whitelisting user: " + username);
-            Map<String, String> uuidToUsername = new HashMap<>();
-            uuidToUsername.put(uuid, username);
-            whitelistCache.updateWhitelist(uuidToUsername);
+        Map<String, String> userInfo = uuidResolver.resolveUUIDToUsername(uuid);
+        if (userInfo != null) {
+            String username = userInfo.get("username");
+            String fullUUID = userInfo.get("fullUUID");
+
+            if (fullUUID != null && username != null) {
+                System.out.println("Whitelisting user: " + username + " with UUID: " + fullUUID);
+                Map<String, String> uuidToUsername = new HashMap<>();
+                uuidToUsername.put(fullUUID, username);  // Store full UUID and username in the cache
+                whitelistCache.updateWhitelist(uuidToUsername);
+            } else {
+                System.err.println("Failed to resolve full UUID or username for: " + uuid);
+            }
         } else {
             System.err.println("Failed to convert UUID to username for: " + uuid);
         }

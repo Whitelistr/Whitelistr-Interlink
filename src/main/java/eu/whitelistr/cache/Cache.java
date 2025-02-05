@@ -59,6 +59,7 @@ public class Cache {
 
     public boolean isPlayerWhitelisted(String uuid) {
         // Check local cache first
+        System.out.println("Checking local cache for player: " + uuid);
         String dbUrl = Database.getDbUrl();
         String querySQL = "SELECT uuid FROM whitelist WHERE uuid = ?";
         try (Connection conn = DriverManager.getConnection(dbUrl);
@@ -73,6 +74,7 @@ public class Cache {
         }
 
         // Fallback to WebSocket check if not in local cache
+        System.out.println("Checking WebSocket for player: " + uuid);
         boolean isWhitelisted = webSocketClient.syncIsPlayerWhitelisted(uuid);
         if (isWhitelisted) {
             // Update cache with new entry
