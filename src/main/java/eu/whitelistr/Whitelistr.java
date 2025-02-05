@@ -1,9 +1,8 @@
 package eu.whitelistr;
 
 import cpw.mods.fml.common.Mod;
-import cpw.mods.fml.common.event.FMLInitializationEvent;
-import cpw.mods.fml.common.event.FMLPreInitializationEvent;
-import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.event.*;
+import cpw.mods.fml.common.FMLLog;
 import eu.whitelistr.cache.Cache;
 import eu.whitelistr.cache.Database;
 import eu.whitelistr.events.ConfigHandler;
@@ -13,48 +12,80 @@ import eu.whitelistr.utils.Libraries;
 
 @Mod(modid = Whitelistr.MODID, version = "1.0", name = "Whitelistr", acceptableRemoteVersions = "*")
 public class Whitelistr {
-
     public static final String MODID = "whitelistr";
     private WClient webSocketClient;
     private Cache whitelistCache;
 
-
     static {
         try {
+            FMLLog.info("[Whitelistr] Loading required libraries...");
             Libraries.loadLibraries();
-        } catch(Exception e) {
-            System.err.println("Failed to load external libraries: " + e.getMessage());
+            FMLLog.info("[Whitelistr] Libraries loaded successfully");
+        } catch (Exception e) {
+            FMLLog.severe("[Whitelistr] FATAL ERROR: Failed to load required libraries!");
+            FMLLog.severe("Error details: %s", e.getMessage());
             e.printStackTrace();
+            throw new RuntimeException("Failed to load Whitelistr dependencies", e);
         }
     }
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
+        FMLLog.info("[Whitelistr] Initializing mod...");
     }
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        ConfigHandler.loadConfig();
-
         try {
-            webSocketClient = new WClient(ConfigHandler.WEBSOCKET_URL, ConfigHandler.SERVER_UUID, ConfigHandler.API_KEY);
-            webSocketClient.connect();
-            Database database = new Database();
-            whitelistCache = new Cache(database, webSocketClient);
+            FMLLog.info("[Whitelistr] Loading configuration...");
+            ConfigHandler.loadConfig();
 
+            FMLLog.info("[Whitelistr] Initializing network components...");
+            initializeNetworkComponents();
 
-            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(
-                new PlayerEventHandler(webSocketClient, whitelistCache)
-            );
+            FMLLog.info("[Whitelistr] Registering event handlers...");
+            registerEventHandlers();
 
         } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("Failed to initialize Whitelistr. Disabling mod.");
+            FMLLog.severe("[Whitelistr] Initialization failed: %s", e.getMessage());
+            throw new RuntimeException("Whitelistr initialization failed", e);
+        }
+    }
+
+    private void initializeNetworkComponents() throws Exception {
+        FMLLog.info("[Whitelistr] Connecting to WebSocket server...");
+        webSocketClient = new WClient(
+            ConfigHandler.WEBSOCKET_URL,
+            ConfigHandler.SERVER_UUID,
+            ConfigHandler.API_KEY
+        );
+        webSocketClient.connect();
+
+        FMLLog.info("[Whitelistr] Initializing cache system...");
+        whitelistCache = new Cache(new Database(), webSocketClient);
+    }
+
+    private void registerEventHandlers() {
+        PlayerEventHandler handler = new PlayerEventHandler(webSocketClient, whitelistCache);
+        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(handler);
+        FMLLog.info("[Whitelistr] Event handlers registered");
+    }
+
+    @Mod.EventHandler
+    public void serverStopping(FMLServerStoppingEvent event) {
+        FMLLog.info("[Whitelistr] Server stopping - cleaning up resources...");
+        if (webSocketClient != null) {
+            FMLLog.info("[Whitelistr] Shutting down WebSocket client...");
+            webSocketClient.shutdown();
+        }
+        if (whitelistCache != null) {
+            FMLLog.info("[Whitelistr] Shutting down cache system...");
+            whitelistCache.shutdown();
         }
     }
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
-        System.out.println("Whitelistr Mod: Server Starting with UUID: " + ConfigHandler.SERVER_UUID);
+        FMLLog.info("[Whitelistr] Server started with UUID: %s", ConfigHandler.SERVER_UUID);
     }
 }

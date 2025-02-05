@@ -3,6 +3,7 @@ package eu.whitelistr.network;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import cpw.mods.fml.common.FMLLog;
 import eu.whitelistr.cache.Cache;
 import eu.whitelistr.cache.Database;
 import eu.whitelistr.utils.UUIDResolver;
@@ -12,24 +13,25 @@ import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.*;
 
 import static eu.whitelistr.events.ConfigHandler.SERVER_UUID;
 
 public class WClient extends WebSocketClient {
-
     public static final Gson gson = new Gson();
-    private boolean reconnecting = false;
-    private final Cache whitelistCache;
-    private static final int MAX_RETRY_ATTEMPTS = 5;
-    private WebSocketResponseCallback callback;
-    private final UUIDResolver uuidResolver;
 
-    public WClient(String serverUri, String serverUUID, String apiKey) throws URISyntaxException {
+    private final Cache whitelistCache;
+    private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final UUIDResolver uuidResolver = new UUIDResolver();
+    private final Object connectionLock = new Object();
+    private volatile boolean isRunning = true;
+
+    public WClient(String serverUri, String serverUUID, String apiKey) throws Exception {
         super(new URI(serverUri), buildHeaders(serverUUID, apiKey));
         this.whitelistCache = new Cache(new Database(), this);
-        this.uuidResolver = new UUIDResolver();
     }
 
     private static Map<String, String> buildHeaders(String serverUUID, String apiKey) {
@@ -41,42 +43,61 @@ public class WClient extends WebSocketClient {
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
-        System.out.println("Connected to WebSocket server");
-        reconnecting = false;
+        FMLLog.info("WebSocket connection established");
         sendCacheRequest();
     }
 
-    public interface WebSocketResponseCallback {
-        void onResponse(boolean isWhitelisted);
-    }
     @Override
-
     public void onMessage(String message) {
         JsonObject jsonResponse = new JsonParser().parse(message).getAsJsonObject();
-        if (jsonResponse.has("action") && jsonResponse.get("action").getAsString().equals("isWhitelisted")) {
-            boolean isWhitelisted = jsonResponse.get("isWhitelisted").getAsBoolean();
-            if (callback != null) {
-                callback.onResponse(isWhitelisted);
-                callback = null;
+        handleMessageAction(jsonResponse);
+    }
+
+    private void handleMessageAction(JsonObject json) {
+        if (json.has("action")) {
+            String action = json.get("action").getAsString();
+            if ("isWhitelisted".equals(action)) {
+                handleWhitelistResponse(json);
+            } else if ("sendCache".equals(action)) {
+                handleCacheUpdate(json);
             }
-        }
-        if (jsonResponse.has("whitelistedPlayers")) {
-            jsonResponse.getAsJsonArray("whitelistedPlayers").forEach(element -> {
-                String uuid = element.getAsString();
-                whitelistUser(uuid);
-            });
         }
     }
 
+    private void handleWhitelistResponse(JsonObject json) {
+        boolean isWhitelisted = json.get("isWhitelisted").getAsBoolean();
+        synchronized (connectionLock) {
+            connectionLock.notifyAll();
+        }
+    }
 
-    public void setWebSocketResponseCallback(WebSocketResponseCallback callback) {
-        this.callback = callback;
+    private void handleCacheUpdate(JsonObject json) {
+        json.getAsJsonArray("whitelistedPlayers").forEach(element -> {
+            String uuid = element.getAsString();
+            whitelistUser(uuid);
+        });
     }
 
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        System.out.println("Disconnected from WebSocket server: " + reason);
-        reconnect();
+        FMLLog.warning("WebSocket closed: %s (code %d)", reason, code);
+        if (isRunning) scheduleReconnect();
+    }
+
+    private void scheduleReconnect() {
+        reconnectExecutor.schedule(() -> {
+            try {
+                FMLLog.info("Attempting WebSocket reconnection...");
+                this.reconnectBlocking();
+            } catch (Exception e) {
+                FMLLog.warning("Reconnection failed: %s", e.getMessage());
+                if (isRunning) scheduleReconnect();
+            }
+        }, calculateBackoffDelay(), TimeUnit.MILLISECONDS);
+    }
+
+    private long calculateBackoffDelay() {
+        return ThreadLocalRandom.current().nextLong(1000, 10000);
     }
 
     @Override
@@ -84,34 +105,10 @@ public class WClient extends WebSocketClient {
         ex.printStackTrace();
     }
 
-    public void reconnect() {
-        if (!reconnecting) {
-            reconnecting = true;
-            System.out.println("Attempting to reconnect...");
-            new Thread(() -> {
-                int attemptCount = 0;
-                while (attemptCount < MAX_RETRY_ATTEMPTS) {
-                    try {
-                        Thread.sleep((long) (Math.pow(2, attemptCount) * 1000));
-                        this.reconnectBlocking();
-                        System.out.println("Reconnection initiated.");
-                        reconnecting = false;
-                        break;
-                    } catch (InterruptedException e) {
-                        System.err.println("Reconnection attempt interrupted: " + e.getMessage());
-                        Thread.currentThread().interrupt();
-                    } catch (Exception e) {
-                        System.err.println("Reconnection failed: " + e.getMessage());
-                    }
-                    attemptCount++;
-                }
-
-                if (attemptCount >= MAX_RETRY_ATTEMPTS) {
-                    System.err.println("Max reconnection attempts reached. Unable to reconnect.");
-                }
-                reconnecting = false;
-            }).start();
-        }
+    public void shutdown() {
+        isRunning = false;
+        reconnectExecutor.shutdownNow();
+        close();
     }
 
     public void sendCacheRequest() {
@@ -119,62 +116,57 @@ public class WClient extends WebSocketClient {
     }
 
     public boolean syncIsPlayerWhitelisted(String uuid) {
-        if (!this.isOpen()) return false;
-
-        final Object lock = new Object();
-        final boolean[] result = {false};
-
-        setWebSocketResponseCallback(isWhitelisted -> {
-            synchronized (lock) {
-                result[0] = isWhitelisted;
-                lock.notifyAll();
-            }
-        });
+        if (!isOpen()) return false;
 
         JsonObject request = new JsonObject();
         request.addProperty("action", "isWhitelisted");
         request.addProperty("uuid", uuid);
         send(request.toString());
 
-        synchronized (lock) {
+        synchronized (connectionLock) {
             try {
-                lock.wait(1000);
+                connectionLock.wait(3000);
+                return true;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                return false;
             }
         }
-        return result[0];
     }
 
     public String getUsernameFromUUID(String uuid) {
-        Map<String, String> userInfo = uuidResolver.resolveUUIDToUsername(uuid);
-        if (userInfo != null) {
-            return userInfo.get("username");
+        CompletableFuture<Map<String, String>> future = uuidResolver.resolveUUIDToUsernameAsync(uuid);
+        try {
+            Map<String, String> userInfo = future.get(2, TimeUnit.SECONDS); // Timeout after 2 seconds
+            return userInfo != null ? userInfo.get("username") : null;
+        } catch (Exception e) {
+            FMLLog.warning("Failed to resolve username for UUID %s: %s", uuid, e.getMessage());
+            return null;
         }
-        return null;
     }
 
     private void whitelistUser(String uuid) {
         if (uuid == null || uuid.isEmpty()) {
-            System.err.println("Invalid UUID received. Skipping whitelisting.");
+            FMLLog.warning("Invalid UUID received");
             return;
         }
-        Map<String, String> userInfo = uuidResolver.resolveUUIDToUsername(uuid);
-        if (userInfo != null) {
-            String username = userInfo.get("username");
-            String fullUUID = userInfo.get("fullUUID");
 
-            if (fullUUID != null && username != null) {
-                System.out.println("Whitelisting user: " + username + " with UUID: " + fullUUID);
-                Map<String, String> uuidToUsername = new HashMap<>();
-                uuidToUsername.put(fullUUID, username);  // Store full UUID and username in the cache
-                whitelistCache.updateWhitelist(uuidToUsername);
+        uuidResolver.resolveUUIDToUsernameAsync(uuid).thenAccept(userInfo -> {
+            if (userInfo != null) {
+                String username = userInfo.get("username");
+                String fullUUID = userInfo.get("fullUUID");
+
+                if (fullUUID != null && username != null) {
+                    FMLLog.info("Whitelisting user: %s (%s)", username, fullUUID);
+                    Map<String, String> uuidToUsername = Collections.singletonMap(fullUUID, username);
+                    whitelistCache.updateWhitelist(uuidToUsername);
+                } else {
+                    FMLLog.warning("Invalid user data for UUID: %s", uuid);
+                }
             } else {
-                System.err.println("Failed to resolve full UUID or username for: " + uuid);
+                FMLLog.warning("Failed to resolve UUID: %s", uuid);
             }
-        } else {
-            System.err.println("Failed to convert UUID to username for: " + uuid);
-        }
+        });
     }
 
     private static class Event {
