@@ -6,6 +6,7 @@ import cpw.mods.fml.common.FMLLog;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Cache {
     private static final long CACHE_REFRESH_INTERVAL = 300_000L;
@@ -16,6 +17,7 @@ public class Cache {
     private final PreparedStatement selectStatement;
     private final PreparedStatement deleteStatement;
     private final Map<String, String> memoryCache = new ConcurrentHashMap<>();
+    private final AtomicBoolean refreshRequested = new AtomicBoolean(false);
 
     public Cache(Database database, WClient webSocketClient) throws SQLException {
         this.webSocketClient = webSocketClient;
@@ -51,25 +53,28 @@ public class Cache {
                 memoryCache.put(rs.getString("uuid"), rs.getString("username"));
             }
         } catch (SQLException e) {
-            FMLLog.severe("Failed to load memory cache: %s", e.getMessage());
+            FMLLog.severe("[Whitelistr] Failed to load memory cache: %s", e.getMessage());
         }
     }
 
-    private void refreshCache() {
+    public void refreshCache() {
         FMLLog.info("Refreshing whitelist cache...");
         if (webSocketClient.isOpen()) {
             webSocketClient.send("{\"action\":\"sendCache\"}");
         } else {
-            FMLLog.warning("WebSocket connection unavailable for cache refresh");
+            FMLLog.warning("[Whitelistr] WebSocket connection unavailable for cache refresh");
         }
     }
 
+    public Set<String> getCachedUUIDs() {
+        return Collections.unmodifiableSet(memoryCache.keySet());
+    }
+
+
     public void updateWhitelist(Map<String, String> uuidToUsername) {
-        FMLLog.info("Updating local whitelist cache with %d entries", uuidToUsername.size());
+        FMLLog.info("[Whitelistr] Updating local whitelist cache with %d entries", uuidToUsername.size());
         try {
             dbConnection.setAutoCommit(false);
-
-            // Update database
             for (Map.Entry<String, String> entry : uuidToUsername.entrySet()) {
                 insertStatement.setString(1, entry.getKey());
                 insertStatement.setString(2, entry.getValue());
@@ -77,27 +82,36 @@ public class Cache {
             }
             insertStatement.executeBatch();
             dbConnection.commit();
-
-            // Update memory cache
             memoryCache.putAll(uuidToUsername);
         } catch (SQLException e) {
-            FMLLog.severe("Failed to update cache: %s", e.getMessage());
+            FMLLog.severe("[Whitelistr] Failed to update cache: %s", e.getMessage());
             try { dbConnection.rollback(); } catch (SQLException ex) {}
         } finally {
             try { dbConnection.setAutoCommit(true); } catch (SQLException ex) {}
         }
     }
 
-    public void removeFromWhitelist(String uuid) {
-        FMLLog.info("Removing player %s from cache", uuid);
+    public void removeAllExcept(Set<String> uuidsToKeep) {
+        FMLLog.info("[Whitelistr] Synchronizing cache with %d active entries", uuidsToKeep.size());
         try {
+            memoryCache.keySet().removeIf(uuid -> !uuidsToKeep.contains(uuid));
             dbConnection.setAutoCommit(false);
-            deleteStatement.setString(1, uuid);
-            deleteStatement.executeUpdate();
-            dbConnection.commit();
-            memoryCache.remove(uuid);
+            try (PreparedStatement pstmt = dbConnection.prepareStatement(
+                "DELETE FROM whitelist WHERE uuid = ?")) {
+
+                Set<String> cachedUUIDs = new HashSet<>(getCachedUUIDs());
+                cachedUUIDs.removeAll(uuidsToKeep);
+
+                for (String uuid : cachedUUIDs) {
+                    pstmt.setString(1, uuid);
+                    pstmt.addBatch();
+                }
+                int[] results = pstmt.executeBatch();
+                FMLLog.info("[Whitelistr] Removed %d expired entries", results.length);
+                dbConnection.commit();
+            }
         } catch (SQLException e) {
-            FMLLog.severe("Failed to remove player from cache: %s", e.getMessage());
+            FMLLog.severe("[Whitelistr] Cache synchronization failed: %s", e.getMessage());
             try { dbConnection.rollback(); } catch (SQLException ex) {}
         } finally {
             try { dbConnection.setAutoCommit(true); } catch (SQLException ex) {}
@@ -105,13 +119,10 @@ public class Cache {
     }
 
     public boolean isPlayerWhitelisted(String uuid) {
-        // Check memory cache first
         if (memoryCache.containsKey(uuid)) {
-            FMLLog.info("Player %s found in memory cache", uuid);
+            FMLLog.info("[Whitelistr] Player %s found in memory cache", uuid);
             return true;
         }
-
-        // Check database
         try {
             selectStatement.setString(1, uuid);
             try (ResultSet rs = selectStatement.executeQuery()) {
@@ -122,14 +133,18 @@ public class Cache {
                 }
             }
         } catch (SQLException e) {
-            FMLLog.warning("Cache query failed for %s: %s", uuid, e.getMessage());
+            FMLLog.warning("[Whitelistr] Cache query failed for %s: %s", uuid, e.getMessage());
         }
 
         return checkRemoteWhitelist(uuid);
     }
 
     private boolean checkRemoteWhitelist(String uuid) {
-        FMLLog.info("Checking remote whitelist for %s", uuid);
+        FMLLog.info("[Whitelistr] Checking remote whitelist for %s", uuid);
+        if (!refreshRequested.getAndSet(true)) {
+            FMLLog.info("[Whitelistr] Requesting full cache refresh for missing UUID: %s", uuid);
+            refreshCache();
+        }
         boolean isWhitelisted = webSocketClient.syncIsPlayerWhitelisted(uuid);
         if (isWhitelisted) {
             cacheRemotePlayer(uuid);
@@ -157,7 +172,7 @@ public class Cache {
             deleteStatement.close();
             dbConnection.close();
         } catch (Exception e) {
-            FMLLog.severe("Error shutting down cache: %s", e.getMessage());
+            FMLLog.severe("[Whitelistr] Error shutting down SQL cache: %s", e.getMessage());
         }
     }
 }

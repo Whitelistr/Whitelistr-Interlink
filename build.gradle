@@ -16,6 +16,7 @@ plugins {
 shadowJar {
     minimize()
     mergeServiceFiles()
+    exclude 'META-INF/versions/9/module-info.class'
 }
 
 

@@ -1,5 +1,6 @@
 package eu.whitelistr.events;
 
+import cpw.mods.fml.common.FMLLog;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
 import eu.whitelistr.cache.Cache;
@@ -41,19 +42,18 @@ public class PlayerEventHandler {
                 System.currentTimeMillis(),
                 ConfigHandler.SERVER_UUID
             );
-            System.out.println("Debug: PlayerInfo - " + playerInfo);
-            //sendPlayerDataToWebServer(playerInfo);
+            sendPlayerDataToWebServer(playerInfo);
             if (!whitelistCache.isPlayerWhitelisted(uuid)) {
                 player.playerNetServerHandler.kickPlayerFromServer("You are not whitelisted!");
             } else {
-                System.out.println("Player " + player.getDisplayName() + " joined successfully.");
+                FMLLog.info("Player " + player.getDisplayName() + " joined successfully.");
             }
         }
     }
 
     private void sendPlayerDataToWebServer(PlayerInfo playerInfo) {
         if (playerInfo == null || webSocketClient == null) {
-            System.err.println("Error: PlayerInfo or WebSocketClient is null!");
+            FMLLog.bigWarning("[Whitelistr] Error: PlayerInfo or WebSocketClient is null!");
             return;
         }
 
@@ -72,7 +72,7 @@ public class PlayerEventHandler {
         if (webSocketClient.isOpen()) {
             webSocketClient.send(json.toString());
         } else {
-            System.err.println("WebSocket is not open, cannot send player data.");
+            FMLLog.warning("WebSocket is not open, cannot send player data.");
         }
     }
 

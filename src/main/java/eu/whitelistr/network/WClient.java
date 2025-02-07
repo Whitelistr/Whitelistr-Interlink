@@ -13,9 +13,7 @@ import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Collections;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.*;
 import java.util.concurrent.*;
 
 import static eu.whitelistr.events.ConfigHandler.SERVER_UUID;
@@ -43,7 +41,7 @@ public class WClient extends WebSocketClient {
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
-        FMLLog.info("WebSocket connection established");
+        FMLLog.info("[Whitelistr] WebSocket connection established");
         sendCacheRequest();
     }
 
@@ -55,26 +53,23 @@ public class WClient extends WebSocketClient {
 
     private void handleMessageAction(JsonObject json) {
         if (json.has("action")) {
-            String action = json.get("action").getAsString();
-            if ("isWhitelisted".equals(action)) {
-                handleWhitelistResponse(json);
-            } else if ("sendCache".equals(action)) {
+            String action = json.get("action").getAsString();;
+            if ("sendCache".equals(action)) {
                 handleCacheUpdate(json);
             }
         }
     }
 
-    private void handleWhitelistResponse(JsonObject json) {
-        boolean isWhitelisted = json.get("isWhitelisted").getAsBoolean();
-        synchronized (connectionLock) {
-            connectionLock.notifyAll();
-        }
-    }
-
     private void handleCacheUpdate(JsonObject json) {
+        Set<String> currentWhitelist = new HashSet<>();
         json.getAsJsonArray("whitelistedPlayers").forEach(element -> {
-            String uuid = element.getAsString();
-            whitelistUser(uuid);
+            currentWhitelist.add(element.getAsString());
+        });
+        whitelistCache.removeAllExcept(currentWhitelist);
+        currentWhitelist.parallelStream().forEach(uuid -> {
+            if (!whitelistCache.isPlayerWhitelisted(uuid)) {
+                whitelistUser(uuid);
+            }
         });
     }
 
@@ -112,14 +107,14 @@ public class WClient extends WebSocketClient {
     }
 
     public void sendCacheRequest() {
+        FMLLog.info("Requesting cache update...");
         this.send("{\"action\":\"sendCache\"}");
     }
 
     public boolean syncIsPlayerWhitelisted(String uuid) {
         if (!isOpen()) return false;
-
         JsonObject request = new JsonObject();
-        request.addProperty("action", "isWhitelisted");
+        request.addProperty("action", "sendCache");
         request.addProperty("uuid", uuid);
         send(request.toString());
 
@@ -129,6 +124,14 @@ public class WClient extends WebSocketClient {
                 return true;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                if (whitelistCache != null) {
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(1000);
+                            whitelistCache.refreshCache();
+                        } catch (InterruptedException ignored) {}
+                    }).start();
+                }
                 return false;
             }
         }

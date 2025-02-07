@@ -35,6 +35,7 @@ public class UUIDResolver {
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(3000);
             conn.setReadTimeout(3000);
+            conn.setRequestProperty("User-Agent", "Whitelistr/1.0 (avalanche752@gmail.com)");
 
             try (InputStreamReader reader = new InputStreamReader(conn.getInputStream())) {
                 JsonObject jsonResponse = new JsonParser().parse(reader).getAsJsonObject();
@@ -42,10 +43,11 @@ public class UUIDResolver {
                     JsonObject data = jsonResponse.getAsJsonObject("data");
                     if (data.has("player")) {
                         JsonObject player = data.getAsJsonObject("player");
-                        if (player.has("username") && player.has("id")) {
+                        if (player.has("username") && player.has("id") && player.has("raw_id")) {
                             Map<String, String> result = new HashMap<>();
                             result.put("username", player.get("username").getAsString());
                             result.put("fullUUID", player.get("id").getAsString());
+                            result.put("trimmedUUID", player.get("raw_id").getAsString());
                             result = Collections.unmodifiableMap(result);
                             updateCache(uuid, result);
                             return result;
@@ -54,7 +56,7 @@ public class UUIDResolver {
                 }
             }
         } catch (Exception e) {
-            FMLLog.warning("UUID resolution failed for %s: %s", uuid, e.getMessage());
+            FMLLog.warning("[Whitelistr] UUID resolution failed for %s: %s", uuid, e.getMessage());
         }
         return null;
     }

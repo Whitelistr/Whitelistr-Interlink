@@ -1,5 +1,7 @@
 package eu.whitelistr.cache;
 
+import cpw.mods.fml.common.FMLLog;
+
 import java.io.File;
 import java.sql.*;
 
@@ -35,7 +37,7 @@ public class Database {
                 "username TEXT NOT NULL);";
             stmt.execute(createTableSQL);
         } catch (SQLException e) {
-            System.err.println("Failed to initialize database: " + e.getMessage());
+            FMLLog.bigWarning("Failed to initialize database: " + e.getMessage());
         }
     }
 
