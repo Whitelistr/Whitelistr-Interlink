@@ -32,28 +32,41 @@ public class PlayerEventHandler {
             InetSocketAddress remoteAddress = (InetSocketAddress) networkManager.getSocketAddress();
             String playerIP = remoteAddress.getAddress().getHostAddress();
             EntityPlayerMP player = (EntityPlayerMP) event.player;
-            String uuid = player.getUniqueID().toString();
+            String uuid = player.getUniqueID().toString().replace("-", "");
 
             PlayerInfo playerInfo = new PlayerInfo(
                 playerIP,
                 event.player.getDisplayName(),
-                event.player.getUniqueID().toString(),
+                uuid,
                 remoteAddress.getHostName(),
                 System.currentTimeMillis(),
                 ConfigHandler.SERVER_UUID
             );
             sendPlayerDataToWebServer(playerInfo);
-            if (!whitelistCache.isPlayerWhitelisted(uuid)) {
-                player.playerNetServerHandler.kickPlayerFromServer("You are not whitelisted!");
-            } else {
-                FMLLog.info("Player " + player.getDisplayName() + " joined successfully.");
+
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Checking whitelist for player %s (%s)", player.getDisplayName(), uuid);
+            if (whitelistCache.isPlayerWhitelisted(uuid)) {
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified in local cache (initial check)", uuid);
+                return;
             }
+
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Cache miss for %s, triggering synchronous remote check with whitelist verification", uuid);
+            boolean isWhitelistedRemotely = webSocketClient.syncIsPlayerWhitelisted(uuid);
+
+            if (isWhitelistedRemotely) {
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified after remote cache update and whitelist check", uuid);
+                return;
+            }
+
+            FMLLog.warning("Player %s NOT on whitelist, kicking...", player.getDisplayName());
+            player.playerNetServerHandler.kickPlayerFromServer("You are not on a Whitelist");
         }
     }
 
+
     private void sendPlayerDataToWebServer(PlayerInfo playerInfo) {
         if (playerInfo == null || webSocketClient == null) {
-            FMLLog.bigWarning("[Whitelistr] Error: PlayerInfo or WebSocketClient is null!");
+            if (ConfigHandler.DEBUG_MODE) FMLLog.bigWarning("[Whitelistr] Error: PlayerInfo or WebSocketClient is null!");
             return;
         }
 
@@ -72,11 +85,9 @@ public class PlayerEventHandler {
         if (webSocketClient.isOpen()) {
             webSocketClient.send(json.toString());
         } else {
-            FMLLog.warning("WebSocket is not open, cannot send player data.");
+            if (ConfigHandler.DEBUG_MODE) FMLLog.warning("WebSocket is not open, cannot send player data.");
         }
     }
 
 
 }
-
-

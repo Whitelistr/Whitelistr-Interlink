@@ -1,7 +1,5 @@
 package eu.whitelistr.data;
 
-import eu.whitelistr.network.WClient;
-
 public class PlayerInfo {
     private String ip;
     private String username;
@@ -43,8 +41,5 @@ public class PlayerInfo {
         return serverUUID;
     }
 
-    public String toJson() {
-        return WClient.gson.toJson(this);
-    }
 }
 

@@ -1,6 +1,5 @@
 package eu.whitelistr.utils;
 
-import net.minecraft.launchwrapper.Launch;
 
 import java.io.File;
 import java.io.FileOutputStream;

@@ -6,26 +6,23 @@ import com.google.gson.JsonParser;
 import cpw.mods.fml.common.FMLLog;
 import eu.whitelistr.cache.Cache;
 import eu.whitelistr.cache.Database;
-import eu.whitelistr.utils.UUIDResolver;
+import eu.whitelistr.events.ConfigHandler;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
-
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
-
-import static eu.whitelistr.events.ConfigHandler.SERVER_UUID;
 
 public class WClient extends WebSocketClient {
     public static final Gson gson = new Gson();
 
     private final Cache whitelistCache;
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
-    private final UUIDResolver uuidResolver = new UUIDResolver();
     private final Object connectionLock = new Object();
     private volatile boolean isRunning = true;
+    private volatile boolean cacheUpdated = false;
 
     public WClient(String serverUri, String serverUUID, String apiKey) throws Exception {
         super(new URI(serverUri), buildHeaders(serverUUID, apiKey));
@@ -41,51 +38,75 @@ public class WClient extends WebSocketClient {
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
-        FMLLog.info("[Whitelistr] WebSocket connection established");
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] WebSocket connection established");
         sendCacheRequest();
     }
 
     @Override
     public void onMessage(String message) {
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] WebSocket onMessage received at: " + Instant.now());
         JsonObject jsonResponse = new JsonParser().parse(message).getAsJsonObject();
         handleMessageAction(jsonResponse);
     }
 
-    private void handleMessageAction(JsonObject json) {
-        if (json.has("action")) {
-            String action = json.get("action").getAsString();;
+    private void handleMessageAction(JsonObject jsonResponse) {
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] handleMessageAction called at: " + Instant.now() + ", json: " + jsonResponse.toString());
+        if (jsonResponse.has("action")) {
+            String action = jsonResponse.get("action").getAsString();
             if ("sendCache".equals(action)) {
-                handleCacheUpdate(json);
+                handleCacheUpdate(jsonResponse);
             }
+        } else if (jsonResponse.has("whitelistedPlayers")) {
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Direct whitelistedPlayers payload detected, handling cache update.");
+            handleCacheUpdate(jsonResponse);
+        } else {
+            if (ConfigHandler.DEBUG_MODE) FMLLog.warning("[Whitelistr] Unknown message format received: " + jsonResponse.toString());
         }
     }
 
-    private void handleCacheUpdate(JsonObject json) {
+    private void handleCacheUpdate(JsonObject jsonResponse) {
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] handleCacheUpdate started at: " + Instant.now() + ", json: " + jsonResponse.toString());
+        cacheUpdated = false;
         Set<String> currentWhitelist = new HashSet<>();
-        json.getAsJsonArray("whitelistedPlayers").forEach(element -> {
-            currentWhitelist.add(element.getAsString());
-        });
-        whitelistCache.removeAllExcept(currentWhitelist);
-        currentWhitelist.parallelStream().forEach(uuid -> {
-            if (!whitelistCache.isPlayerWhitelisted(uuid)) {
-                whitelistUser(uuid);
+        if(jsonResponse.has("whitelistedPlayers") && jsonResponse.get("whitelistedPlayers").isJsonArray()) {
+            jsonResponse.getAsJsonArray("whitelistedPlayers").forEach(element -> {
+                currentWhitelist.add(element.getAsString());
+            });
+            whitelistCache.removeAllExcept(currentWhitelist);
+            Map<String, String> usernameCache = new HashMap<>();
+            currentWhitelist.parallelStream().forEach(uuid -> {
+                if (!whitelistCache.isPlayerWhitelisted(uuid)) {
+                    usernameCache.put(uuid, "");
+                }
+            });
+            whitelistCache.updateWhitelist(usernameCache);
+            cacheUpdated = true;
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Cache updated flag set to true at: " + Instant.now());
+            synchronized (connectionLock) {
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Notifying connectionLock at: " + Instant.now());
+                connectionLock.notifyAll();
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Notification sent at: " + Instant.now());
             }
-        });
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] handleCacheUpdate finished and notified at: " + Instant.now());
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Cache update processed and notified.");
+        } else {
+            if (ConfigHandler.DEBUG_MODE) FMLLog.warning("[Whitelistr] handleCacheUpdate: whitelistedPlayers array not found or invalid in JSON: " + jsonResponse.toString());
+        }
     }
 
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        FMLLog.warning("WebSocket closed: %s (code %d)", reason, code);
+        if (ConfigHandler.DEBUG_MODE) FMLLog.warning("WebSocket closed: %s (code %d)", reason, code);
         if (isRunning) scheduleReconnect();
     }
 
     private void scheduleReconnect() {
         reconnectExecutor.schedule(() -> {
             try {
-                FMLLog.info("Attempting WebSocket reconnection...");
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Attempting WebSocket reconnection...");
                 this.reconnectBlocking();
             } catch (Exception e) {
-                FMLLog.warning("Reconnection failed: %s", e.getMessage());
+                if (ConfigHandler.DEBUG_MODE) FMLLog.warning("Reconnection failed: %s", e.getMessage());
                 if (isRunning) scheduleReconnect();
             }
         }, calculateBackoffDelay(), TimeUnit.MILLISECONDS);
@@ -107,88 +128,35 @@ public class WClient extends WebSocketClient {
     }
 
     public void sendCacheRequest() {
-        FMLLog.info("Requesting cache update...");
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("Requesting cache update from WebSocket server...");
         this.send("{\"action\":\"sendCache\"}");
     }
 
     public boolean syncIsPlayerWhitelisted(String uuid) {
         if (!isOpen()) return false;
+        cacheUpdated = false;
         JsonObject request = new JsonObject();
         request.addProperty("action", "sendCache");
-        request.addProperty("uuid", uuid);
         send(request.toString());
 
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] syncIsPlayerWhitelisted - Waiting on connectionLock at: " + Instant.now());
         synchronized (connectionLock) {
             try {
-                connectionLock.wait(3000);
-                return true;
+                connectionLock.wait(10000);
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] syncIsPlayerWhitelisted - Wait finished at: " + Instant.now());
+                if (cacheUpdated) {
+                    boolean isWhitelisted = whitelistCache.isPlayerWhitelisted(uuid);
+                    if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] syncIsPlayerWhitelisted - Cache updated, player whitelisted status: " + isWhitelisted + " at: " + Instant.now());
+                    return isWhitelisted;
+                } else {
+                    if (ConfigHandler.DEBUG_MODE) FMLLog.warning("[Whitelistr] syncIsPlayerWhitelisted - Timeout before cache update at: " + Instant.now());
+                    return false;
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                if (whitelistCache != null) {
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(1000);
-                            whitelistCache.refreshCache();
-                        } catch (InterruptedException ignored) {}
-                    }).start();
-                }
+                if (ConfigHandler.DEBUG_MODE) FMLLog.warning("[Whitelistr] syncIsPlayerWhitelisted - Interrupted during wait at: " + Instant.now());
                 return false;
             }
         }
     }
-
-    public String getUsernameFromUUID(String uuid) {
-        CompletableFuture<Map<String, String>> future = uuidResolver.resolveUUIDToUsernameAsync(uuid);
-        try {
-            Map<String, String> userInfo = future.get(2, TimeUnit.SECONDS); // Timeout after 2 seconds
-            return userInfo != null ? userInfo.get("username") : null;
-        } catch (Exception e) {
-            FMLLog.warning("Failed to resolve username for UUID %s: %s", uuid, e.getMessage());
-            return null;
-        }
-    }
-
-    private void whitelistUser(String uuid) {
-        if (uuid == null || uuid.isEmpty()) {
-            FMLLog.warning("Invalid UUID received");
-            return;
-        }
-
-        uuidResolver.resolveUUIDToUsernameAsync(uuid).thenAccept(userInfo -> {
-            if (userInfo != null) {
-                String username = userInfo.get("username");
-                String fullUUID = userInfo.get("fullUUID");
-
-                if (fullUUID != null && username != null) {
-                    FMLLog.info("Whitelisting user: %s (%s)", username, fullUUID);
-                    Map<String, String> uuidToUsername = Collections.singletonMap(fullUUID, username);
-                    whitelistCache.updateWhitelist(uuidToUsername);
-                } else {
-                    FMLLog.warning("Invalid user data for UUID: %s", uuid);
-                }
-            } else {
-                FMLLog.warning("Failed to resolve UUID: %s", uuid);
-            }
-        });
-    }
-
-    private static class Event {
-        private String uuid;
-        private String serverUUID;
-        private String username;
-
-        public String getUuid() {
-            return uuid;
-        }
-
-        public String getServerId() {
-            return serverUUID;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-    }
 }
-
-

@@ -1,5 +1,6 @@
 package eu.whitelistr.cache;
 
+import eu.whitelistr.events.ConfigHandler;
 import eu.whitelistr.network.WClient;
 import cpw.mods.fml.common.FMLLog;
 
@@ -31,7 +32,7 @@ public class Cache {
         this.deleteStatement = dbConnection.prepareStatement(
             "DELETE FROM whitelist WHERE uuid = ?");
 
-        scheduler.scheduleAtFixedRate(this::refreshCache, 0,
+        scheduler.scheduleAtFixedRate(() -> webSocketClient.sendCacheRequest(), 0,
             CACHE_REFRESH_INTERVAL, TimeUnit.MILLISECONDS);
 
         loadMemoryCache();
@@ -47,44 +48,41 @@ public class Cache {
     }
 
     private void loadMemoryCache() {
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [SQL Cache] Loading SQL cache into Memory Cache...");
         try (Statement stmt = dbConnection.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT uuid, username FROM whitelist")) {
+            int loadedCount = 0;
             while (rs.next()) {
                 memoryCache.put(rs.getString("uuid"), rs.getString("username"));
+                loadedCount++;
             }
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Loaded %d entries from SQL Cache to Memory Cache.", loadedCount);
         } catch (SQLException e) {
-            FMLLog.severe("[Whitelistr] Failed to load memory cache: %s", e.getMessage());
+            if (ConfigHandler.DEBUG_MODE) FMLLog.severe("[Whitelistr] [SQL Cache] Failed to load SQL cache into Memory Cache: %s", e.getMessage());
         }
-    }
-
-    public void refreshCache() {
-        FMLLog.info("Refreshing whitelist cache...");
-        if (webSocketClient.isOpen()) {
-            webSocketClient.send("{\"action\":\"sendCache\"}");
-        } else {
-            FMLLog.warning("[Whitelistr] WebSocket connection unavailable for cache refresh");
-        }
-    }
-
-    public Set<String> getCachedUUIDs() {
-        return Collections.unmodifiableSet(memoryCache.keySet());
     }
 
 
     public void updateWhitelist(Map<String, String> uuidToUsername) {
-        FMLLog.info("[Whitelistr] Updating local whitelist cache with %d entries", uuidToUsername.size());
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Updating Memory Cache with %d entries", uuidToUsername.size());
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Current Memory Cache size: %d", memoryCache.size());
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Current Memory Cache contents: %s", memoryCache.keySet());
         try {
             dbConnection.setAutoCommit(false);
+            int batchCount = 0;
             for (Map.Entry<String, String> entry : uuidToUsername.entrySet()) {
                 insertStatement.setString(1, entry.getKey());
                 insertStatement.setString(2, entry.getValue());
                 insertStatement.addBatch();
+                batchCount++;
             }
             insertStatement.executeBatch();
             dbConnection.commit();
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [SQL Cache] Updated SQL Cache with %d entries.", batchCount);
             memoryCache.putAll(uuidToUsername);
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Memory Cache updated.");
         } catch (SQLException e) {
-            FMLLog.severe("[Whitelistr] Failed to update cache: %s", e.getMessage());
+            if (ConfigHandler.DEBUG_MODE) FMLLog.severe("[Whitelistr] [SQL Cache] Failed to update SQL Cache: %s", e.getMessage());
             try { dbConnection.rollback(); } catch (SQLException ex) {}
         } finally {
             try { dbConnection.setAutoCommit(true); } catch (SQLException ex) {}
@@ -92,26 +90,31 @@ public class Cache {
     }
 
     public void removeAllExcept(Set<String> uuidsToKeep) {
-        FMLLog.info("[Whitelistr] Synchronizing cache with %d active entries", uuidsToKeep.size());
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Cache Sync] Synchronizing cache with %d active entries", uuidsToKeep.size());
+        Set<String> originalUUIDs = new HashSet<>(memoryCache.keySet());
+        Set<String> uuidsToRemove = new HashSet<>(originalUUIDs);
+        uuidsToRemove.removeAll(uuidsToKeep);
+
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Removing %d expired entries from Memory Cache: %s", uuidsToRemove.size(), uuidsToRemove);
+
         try {
-            memoryCache.keySet().removeIf(uuid -> !uuidsToKeep.contains(uuid));
+            memoryCache.keySet().removeAll(uuidsToRemove);
             dbConnection.setAutoCommit(false);
             try (PreparedStatement pstmt = dbConnection.prepareStatement(
                 "DELETE FROM whitelist WHERE uuid = ?")) {
 
-                Set<String> cachedUUIDs = new HashSet<>(getCachedUUIDs());
-                cachedUUIDs.removeAll(uuidsToKeep);
-
-                for (String uuid : cachedUUIDs) {
+                int batchCount = 0;
+                for (String uuid : uuidsToRemove) {
                     pstmt.setString(1, uuid);
                     pstmt.addBatch();
+                    batchCount++;
                 }
                 int[] results = pstmt.executeBatch();
-                FMLLog.info("[Whitelistr] Removed %d expired entries", results.length);
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [SQL Cache] Removed %d expired entries from SQL Cache.", batchCount);
                 dbConnection.commit();
             }
         } catch (SQLException e) {
-            FMLLog.severe("[Whitelistr] Cache synchronization failed: %s", e.getMessage());
+            if (ConfigHandler.DEBUG_MODE) FMLLog.severe("[Whitelistr] [SQL Cache] SQL Cache synchronization failed: %s", e.getMessage());
             try { dbConnection.rollback(); } catch (SQLException ex) {}
         } finally {
             try { dbConnection.setAutoCommit(true); } catch (SQLException ex) {}
@@ -119,46 +122,14 @@ public class Cache {
     }
 
     public boolean isPlayerWhitelisted(String uuid) {
-        if (memoryCache.containsKey(uuid)) {
-            FMLLog.info("[Whitelistr] Player %s found in memory cache", uuid);
-            return true;
-        }
-        try {
-            selectStatement.setString(1, uuid);
-            try (ResultSet rs = selectStatement.executeQuery()) {
-                if (rs.next()) {
-                    String username = rs.getString("username");
-                    memoryCache.put(uuid, username);
-                    return true;
-                }
-            }
-        } catch (SQLException e) {
-            FMLLog.warning("[Whitelistr] Cache query failed for %s: %s", uuid, e.getMessage());
-        }
-
-        return checkRemoteWhitelist(uuid);
+        boolean inCache = memoryCache.containsKey(uuid);
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] [Memory Cache] Checking Memory Cache for player %s, result: %s", uuid, inCache);
+        return inCache;
     }
 
-    private boolean checkRemoteWhitelist(String uuid) {
-        FMLLog.info("[Whitelistr] Checking remote whitelist for %s", uuid);
-        if (!refreshRequested.getAndSet(true)) {
-            FMLLog.info("[Whitelistr] Requesting full cache refresh for missing UUID: %s", uuid);
-            refreshCache();
-        }
-        boolean isWhitelisted = webSocketClient.syncIsPlayerWhitelisted(uuid);
-        if (isWhitelisted) {
-            cacheRemotePlayer(uuid);
-        }
-        return isWhitelisted;
-    }
 
-    private void cacheRemotePlayer(String uuid) {
-        String username = webSocketClient.getUsernameFromUUID(uuid);
-        if (username != null) {
-            Map<String, String> update = new HashMap<>();
-            update.put(uuid, username);
-            updateWhitelist(update);
-        }
+    public String getUsername(String uuid) {
+        return memoryCache.getOrDefault(uuid, "");
     }
 
     public void shutdown() {
@@ -172,7 +143,7 @@ public class Cache {
             deleteStatement.close();
             dbConnection.close();
         } catch (Exception e) {
-            FMLLog.severe("[Whitelistr] Error shutting down SQL cache: %s", e.getMessage());
+            if (ConfigHandler.DEBUG_MODE) FMLLog.severe("[Whitelistr] [SQL Cache] Error shutting down SQL Cache: %s", e.getMessage());
         }
     }
 }

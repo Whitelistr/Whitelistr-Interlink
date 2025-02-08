@@ -34,7 +34,7 @@ public class Database {
 
             String createTableSQL = "CREATE TABLE IF NOT EXISTS whitelist (" +
                 "uuid TEXT PRIMARY KEY NOT NULL, " +
-                "username TEXT NOT NULL);";
+                "username TEXT)";
             stmt.execute(createTableSQL);
         } catch (SQLException e) {
             FMLLog.bigWarning("Failed to initialize database: " + e.getMessage());
