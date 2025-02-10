@@ -27,7 +27,7 @@ public class PlayerEventHandler {
     }
 
     @SubscribeEvent
-    public void onPlayerLogin(PlayerEvent.Login event) { // Changed to PlayerEvent.Login
+    public void onPlayerLogin(PlayerEvent.Login event) {
         if (event.player instanceof EntityPlayerMP) {
             NetworkManager networkManager = ((EntityPlayerMP) event.player).playerNetServerHandler.netManager;
             InetSocketAddress remoteAddress = (InetSocketAddress) networkManager.getSocketAddress();
