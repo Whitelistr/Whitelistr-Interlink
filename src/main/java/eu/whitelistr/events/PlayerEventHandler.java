@@ -8,6 +8,7 @@ import eu.whitelistr.network.WClient;
 import eu.whitelistr.data.PlayerInfo;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.NetworkManager;
+import net.minecraft.util.ChatComponentText; 
 
 import java.net.InetSocketAddress;
 import com.google.gson.JsonObject;
@@ -26,7 +27,7 @@ public class PlayerEventHandler {
     }
 
     @SubscribeEvent
-    public void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+    public void onPlayerLogin(PlayerEvent.Login event) { // Changed to PlayerEvent.Login
         if (event.player instanceof EntityPlayerMP) {
             NetworkManager networkManager = ((EntityPlayerMP) event.player).playerNetServerHandler.netManager;
             InetSocketAddress remoteAddress = (InetSocketAddress) networkManager.getSocketAddress();
@@ -44,22 +45,23 @@ public class PlayerEventHandler {
             );
             sendPlayerDataToWebServer(playerInfo);
 
-            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Checking whitelist for player %s (%s)", player.getDisplayName(), uuid);
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Checking whitelist for player %s (%s) [Pre-Join]", player.getDisplayName(), uuid); 
             if (whitelistCache.isPlayerWhitelisted(uuid)) {
-                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified in local cache (initial check)", uuid);
-                return;
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified in local cache (pre-join check)", uuid);
+                return; // Player is whitelisted in local cache (pre-join check)
             }
 
-            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Cache miss for %s, triggering synchronous remote check with whitelist verification", uuid);
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Cache miss for %s, triggering synchronous remote check (pre-join)", uuid); 
             boolean isWhitelistedRemotely = webSocketClient.syncIsPlayerWhitelisted(uuid);
 
             if (isWhitelistedRemotely) {
-                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified after remote cache update and whitelist check", uuid);
-                return;
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified after remote check (pre-join)", uuid); 
+                return; 
             }
 
-            FMLLog.warning("Player %s NOT on whitelist, kicking...", player.getDisplayName());
-            player.playerNetServerHandler.kickPlayerFromServer("You are not on a Whitelist");
+            FMLLog.warning("Player %s NOT on whitelist, denying login [Pre-Join]", player.getDisplayName()); 
+            event.setCanceled(true); 
+            event.setCancellationResult(new ChatComponentText("You are not on the whitelist.")); 
         }
     }
 
@@ -88,6 +90,5 @@ public class PlayerEventHandler {
             if (ConfigHandler.DEBUG_MODE) FMLLog.warning("WebSocket is not open, cannot send player data.");
         }
     }
-
-
 }
+
