@@ -11,11 +11,15 @@ import net.minecraft.network.NetworkManager;
 
 import java.net.InetSocketAddress;
 import com.google.gson.JsonObject;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class PlayerEventHandler {
 
     private final WClient webSocketClient;
     private final Cache whitelistCache;
+    private final ScheduledExecutorService delayedWhitelistCheckExecutor = Executors.newSingleThreadScheduledExecutor();
 
     public PlayerEventHandler(WClient webSocketClient, Cache whitelistCache) {
         if (webSocketClient == null || whitelistCache == null) {
@@ -33,10 +37,11 @@ public class PlayerEventHandler {
             String playerIP = remoteAddress.getAddress().getHostAddress();
             EntityPlayerMP player = (EntityPlayerMP) event.player;
             String uuid = player.getUniqueID().toString().replace("-", "");
+            String playerName = player.getDisplayName();
 
             PlayerInfo playerInfo = new PlayerInfo(
                 playerIP,
-                event.player.getDisplayName(),
+                playerName,
                 uuid,
                 remoteAddress.getHostName(),
                 System.currentTimeMillis(),
@@ -44,23 +49,33 @@ public class PlayerEventHandler {
             );
             sendPlayerDataToWebServer(playerInfo);
 
-            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Checking whitelist for player %s (%s)", player.getDisplayName(), uuid);
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Checking whitelist for player %s (%s)", playerName, uuid);
+
             if (whitelistCache.isPlayerWhitelisted(uuid)) {
-                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified in local cache (initial check)", uuid);
+                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified in local cache (initial check)", playerName);
                 return;
             }
 
-            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Cache miss for %s, triggering synchronous remote check with whitelist verification", uuid);
-            boolean isWhitelistedRemotely = webSocketClient.syncIsPlayerWhitelisted(uuid);
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Cache miss for %s (%s), triggering asynchronous cache refresh and delayed whitelist check", playerName, uuid);
 
-            if (isWhitelistedRemotely) {
-                if (ConfigHandler.DEBUG_MODE) FMLLog.info("Player %s verified after remote cache update and whitelist check", uuid);
-                return;
-            }
+            webSocketClient.sendCacheRequest();
 
-            FMLLog.warning("Player %s NOT on whitelist, kicking...", player.getDisplayName());
-            player.playerNetServerHandler.kickPlayerFromServer("You are not on a Whitelist");
+            delayedWhitelistCheckExecutor.schedule(() -> {
+                performDelayedWhitelistCheck(player, uuid, playerName);
+            }, 2, TimeUnit.SECONDS);
         }
+    }
+
+    private void performDelayedWhitelistCheck(EntityPlayerMP player, String uuid, String playerName) {
+        if (ConfigHandler.DEBUG_MODE) FMLLog.info("Delayed whitelist check for %s (%s) started...", playerName, uuid);
+
+        if (whitelistCache.isPlayerWhitelisted(uuid)) {
+            if (ConfigHandler.DEBUG_MODE) FMLLog.info("Delayed check: Player %s (%s) verified in local cache after delay", playerName, uuid);
+            return;
+        }
+
+        FMLLog.warning("Delayed check: Player %s (%s) NOT on whitelist, kicking...", playerName, uuid);
+        player.playerNetServerHandler.kickPlayerFromServer("You are not on a Whitelist");
     }
 
 
@@ -89,5 +104,7 @@ public class PlayerEventHandler {
         }
     }
 
-
+    public void shutdown() {
+        delayedWhitelistCheckExecutor.shutdownNow();
+    }
 }

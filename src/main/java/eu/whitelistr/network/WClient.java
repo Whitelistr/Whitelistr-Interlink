@@ -44,8 +44,10 @@ public class WClient extends WebSocketClient {
 
     @Override
     public void onMessage(String message) {
+        FMLLog.info("[Whitelistr] WebSocket onMessage RAW message: " + message);
         if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] WebSocket onMessage received at: " + Instant.now());
         JsonObject jsonResponse = new JsonParser().parse(message).getAsJsonObject();
+        FMLLog.info("[Whitelistr] WebSocket onMessage parsed JSON: " + jsonResponse.toString());
         handleMessageAction(jsonResponse);
     }
 
@@ -65,6 +67,7 @@ public class WClient extends WebSocketClient {
     }
 
     private void handleCacheUpdate(JsonObject jsonResponse) {
+        FMLLog.info("[Whitelistr] handleCacheUpdate - JSON Payload: " + jsonResponse.toString());
         if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] handleCacheUpdate started at: " + Instant.now() + ", json: " + jsonResponse.toString());
         cacheUpdated = false;
         Set<String> currentWhitelist = new HashSet<>();
@@ -72,6 +75,7 @@ public class WClient extends WebSocketClient {
             jsonResponse.getAsJsonArray("whitelistedPlayers").forEach(element -> {
                 currentWhitelist.add(element.getAsString());
             });
+            FMLLog.info("[Whitelistr] handleCacheUpdate - currentWhitelist before removeAllExcept: " + currentWhitelist);
             whitelistCache.removeAllExcept(currentWhitelist);
             Map<String, String> usernameCache = new HashMap<>();
             currentWhitelist.parallelStream().forEach(uuid -> {
@@ -79,8 +83,10 @@ public class WClient extends WebSocketClient {
                     usernameCache.put(uuid, "");
                 }
             });
+            FMLLog.info("[Whitelistr] handleCacheUpdate - usernameCache before updateWhitelist: " + usernameCache);
             whitelistCache.updateWhitelist(usernameCache);
             cacheUpdated = true;
+            FMLLog.info("[Whitelistr] handleCacheUpdate - cacheUpdated set to true");
             if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Cache updated flag set to true at: " + Instant.now());
             synchronized (connectionLock) {
                 if (ConfigHandler.DEBUG_MODE) FMLLog.info("[Whitelistr] Notifying connectionLock at: " + Instant.now());
